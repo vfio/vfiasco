@@ -15,6 +15,7 @@ from tests import (
     case_aer_error_test,
     case_ats_property_test,
     case_balloon_compatible_test,
+    case_bar_alignment_test,
     case_binding_test,
     case_boot_a_domain_with_device,
     case_boot_a_domain_with_failover_vf,
@@ -364,6 +365,46 @@ def ats_property_test(feature, device_name, domain, machine_type, bios):
         files.append_content(
             log_file,
             "%s | FAIL - ATS property test on %s with %s %s"
+            % (
+                time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                domain,
+                device_name,
+                feature,
+            ),
+        )
+        return False
+
+
+def bar_alignment_test(feature, device_name, domain, machine_type, bios):
+    log_file = get_log_file_path(feature, device_name, domain)
+    if feature == "pf":
+        numpfs = 1
+        numvfs = 0
+    if feature == "vf":
+        numpfs = 0
+        numvfs = 1
+    if feature == "vgpu":
+        numpfs = 0
+        numvfs = 1
+    test_result = case_bar_alignment_test.run(
+        feature, device_name, domain, machine_type, bios, numpfs, numvfs
+    )
+    if test_result:
+        files.append_content(
+            log_file,
+            "%s | PASS - BAR alignment test on %s with %s %s"
+            % (
+                time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                domain,
+                device_name,
+                feature,
+            ),
+        )
+        return True
+    else:
+        files.append_content(
+            log_file,
+            "%s | FAIL - BAR alignment test on %s with %s %s"
             % (
                 time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
                 domain,

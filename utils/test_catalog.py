@@ -22,6 +22,7 @@ TEST_LIST = [
         "ats_property_test",
         "boot a domain with a device 3 times to validate ATS property",
     ),
+    ("bar_alignment_test", "boot a domain with a device and check BAR alignment"),
     ("boot_multi_nic_test", "run the test about boot a vm with multi pfs/vfs"),
     (
         "boot_with_max_vfs_test",
