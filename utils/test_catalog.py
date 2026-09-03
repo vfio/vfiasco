@@ -371,6 +371,7 @@ TEST_LOOPS = [
             "hotplug_multi_nic_test",
             "hotunplug_multi_nic_test",
             "vfio_repeated_device_use_test",
+            "bar_alignment_test",
         ],
     ),
     (
