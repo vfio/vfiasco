@@ -1,0 +1,6 @@
+<network>
+  <name>failover-vf1</name>
+  <forward mode='hostdev' managed='yes'>
+    <pf dev='INTERFACE'/>
+  </forward>
+</network>

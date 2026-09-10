@@ -1,0 +1,9 @@
+<memory model='virtio-mem'>
+  <target>
+    <size unit='KiB'>SIZE</size>
+    <node>0</node>
+    <block unit='KiB'>2048</block>
+    <requested unit='KiB'>0</requested>
+  </target>
+  <alias name='ua-virtiomem0'/>
+</memory>

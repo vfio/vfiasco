@@ -1,0 +1,26 @@
+<!--
+  GraceHopper H100 GPU hostdev injection template.
+
+  bus='0x02': places the GPU on the pcie-root-port (controller index 2) that
+  hangs off the pxb-pcie (index 1).  The SMMUv3 is attached with pciBus='1'
+  (the pxb-pcie bus), so the GPU must land on a downstream bus of that
+  expander — bus 0x02 is the only such port.  Using any of the root-complex
+  ports (buses 0x03-0x08) would leave the GPU outside the SMMUv3 coverage.
+
+  acpi nodeset='1-8': associates the GPU with NUMA cells 1-8, which are the
+  empty placeholder cells representing the H100 HBM memory stacks.  Required
+  for correct NUMA policy when the guest accesses GPU memory.
+
+  managed='yes': libvirt detaches the device from pci_pf_stub and attaches it
+  to nvgrace_gpu_vfio_pci via virsh nodedev-detach at domain start, and
+  reattaches to pci_pf_stub on domain stop.  The host must have the device
+  pre-bound to pci_pf_stub before the first test run.
+-->
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <driver iommufd='yes'/>
+      <source>
+        <address domain='0xDOMAIN' bus='0xBUS' slot='0xSLOT' function='0xFUNCTION'/>
+      </source>
+      <acpi nodeset='1-8'/>
+      <address type='pci' domain='0x0000' bus='0x02' slot='0x00' function='0x0'/>
+    </hostdev>

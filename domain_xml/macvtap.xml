@@ -1,0 +1,6 @@
+    <interface type='direct'>
+      <mac address='MAC_ADDRESS'/>
+      <source dev='INTERFACE' mode='MODE'/>
+      <model type='virtio'/>
+      <driver name='DRIVER'/>
+    </interface>

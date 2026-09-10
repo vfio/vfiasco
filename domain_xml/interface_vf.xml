@@ -1,0 +1,6 @@
+   <interface type='hostdev' managed='yes'>
+      <driver name='vfio'/>
+      <source>
+         <address type='pci' domain='0xDOMAIN' bus='0xBUS' slot='0xSLOT' function='0xFUNCTION'/>
+      </source>
+    </interface>

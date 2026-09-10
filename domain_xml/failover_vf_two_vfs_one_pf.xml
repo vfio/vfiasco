@@ -1,0 +1,10 @@
+     <interface type='network'>
+       <mac address='52:54:00:aa:1c:ef'/>
+       <source network='failover-vf'/>
+       <teaming type='transient' persistent='ua-test'/>
+     </interface>
+     <interface type='network'>
+       <mac address='52:54:00:aa:1c:ff'/>
+       <source network='failover-vf'/>
+       <teaming type='transient' persistent='ua-test1'/>
+     </interface>
