@@ -6,8 +6,8 @@
 #
 # SPDX-License-Identifier: GPL-2.0-only
 
-import sys
 import os
+import sys
 
 from utils.test_catalog import TEST_LIST, TEST_LOOPS
 
@@ -15,6 +15,7 @@ from utils.test_catalog import TEST_LIST, TEST_LOOPS
 def _domain_names():
     try:
         from utils import config
+
         cfg = config.config_parser(["domains.ini"])
         return sorted(k for k in cfg if k != "domain")
     except Exception:
@@ -24,6 +25,7 @@ def _domain_names():
 def _device_names():
     try:
         from utils import config
+
         cfg = config.config_parser(["host_devices.ini"])
         return sorted(k for k in cfg if "device_addr" in cfg[k])
     except Exception:
@@ -42,6 +44,7 @@ def usage():
             test_lines += "          %s\n          %-*s  %s\n" % (name, col, "", desc)
 
     from utils.setup_domain import MACHINE_BIOS
+
     machine_types = ", ".join(sorted(MACHINE_BIOS))
     bios_types = ", ".join(sorted(set(MACHINE_BIOS.values())))
     defaults = ", ".join("%s=%s" % (m, b) for m, b in sorted(MACHINE_BIOS.items()))
@@ -53,14 +56,20 @@ def usage():
     loop_lines = ""
     for t in TEST_LOOPS:
         key, label, tests = t[0], t[1], t[2]
-        loop_lines += "          %-*s  %s (%d tests)\n" % (loop_col, key, label, len(tests))
+        loop_lines += "          %-*s  %s (%d tests)\n" % (
+            loop_col,
+            key,
+            label,
+            len(tests),
+        )
 
     loop_detail = ""
     for t in TEST_LOOPS:
         key, label, tests = t[0], t[1], t[2]
-        loop_detail += "  %s:\n    \"%s\"\n\n" % (label, ",".join(tests))
+        loop_detail += '  %s:\n    "%s"\n\n' % (label, ",".join(tests))
 
-    print("""
+    print(
+        """
 Usage:
 -----
     %(argv0)s [options]
@@ -118,4 +127,6 @@ Examples:
   python3 vfiasco.py --feature=vf --domain=centos10 --device_name=igb_nic --machine_type=q35 --test_list="shutdown_test"
   python3 vfiasco.py --feature=pf --domain=centos10 --device_name=ixgbe_nic --machine_type=q35 --test_list="hotunplug_nvme_device"
   python3 vfiasco.py --feature=vf --domain=centos10 --device_name=igb_nic --machine_type=q35 --test_loop=tier1
-    """ % locals())
+    """
+        % locals()
+    )

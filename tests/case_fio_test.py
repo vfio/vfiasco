@@ -8,23 +8,24 @@
 
 import time
 
-from utils import qemu_vm
-from utils import logger
-from utils import config
-from utils import host
-from utils import pci_utils
-from utils import virsh
+from utils import config, host, logger, pci_utils, qemu_vm, virsh
 
 
 def run(feature, device_name, domain_name, machine_type, bios, numpfs=1, numvfs=0):
-    log = logger.create_logger(file_name="fio_test_%s_with_%spf_%svf_%s" % (domain_name, numpfs, numvfs, device_name))
+    log = logger.create_logger(
+        file_name="fio_test_%s_with_%spf_%svf_%s"
+        % (domain_name, numpfs, numvfs, device_name)
+    )
 
-    log.info("========== case: fio test on %s with %s pf and %s vf %s ============" % (domain_name, numpfs, numvfs, device_name))
-    log.info('')
+    log.info(
+        "========== case: fio test on %s with %s pf and %s vf %s ============"
+        % (domain_name, numpfs, numvfs, device_name)
+    )
+    log.info("")
 
     config_list = ["host_devices.ini", "domains.ini"]
     cfg = config.config_parser(config_list)
-    domain_cfg = config.update_dict(cfg, 'domain', domain_name)["domain"]
+    domain_cfg = config.update_dict(cfg, "domain", domain_name)["domain"]
     device_cfg = cfg[device_name]
 
     pf_addr = device_cfg["device_addr"].split(",")[0]
@@ -42,8 +43,12 @@ def run(feature, device_name, domain_name, machine_type, bios, numpfs=1, numvfs=
 
     vm = None
     try:
-        vm = qemu_vm.VM(domain_cfg, feature, device_name, machine_type, bios, numpfs, numvfs)
-        test_device_list = host.get_test_device_list(feature, device_name, numpfs, numvfs)
+        vm = qemu_vm.VM(
+            domain_cfg, feature, device_name, machine_type, bios, numpfs, numvfs
+        )
+        test_device_list = host.get_test_device_list(
+            feature, device_name, numpfs, numvfs
+        )
 
         if not host.has_interface("virbr0"):
             virsh.active_vm_net_list()
@@ -89,7 +94,12 @@ def run(feature, device_name, domain_name, machine_type, bios, numpfs=1, numvfs=
             for pf_address in pf_list:
                 virsh.nodedev_reattach(pf_address)
 
-    test_summary = "fio test on %s vm with %s ( %s pf and %s vf )" % (domain_name, device_name, numpfs, numvfs)
+    test_summary = "fio test on %s vm with %s ( %s pf and %s vf )" % (
+        domain_name,
+        device_name,
+        numpfs,
+        numvfs,
+    )
     if fio_result:
         log.info("PASS - %s\n" % test_summary)
         log.remove_handler()

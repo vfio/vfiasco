@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
 
-#pci_addr_str = "0000:04:00.0"
+# pci_addr_str = "0000:04:00.0"
 
 
 class Pci(object):
@@ -42,5 +42,5 @@ def get_nodedev_address(device_address):
     bus = pci_handle.get_pci_bus()
     slot = pci_handle.get_pci_slot()
     function = pci_handle.get_pci_function()
-    node_device_address = "pci"+"_"+domain+"_"+bus+"_"+slot+"_"+function
+    node_device_address = "pci" + "_" + domain + "_" + bus + "_" + slot + "_" + function
     return str(node_device_address)

@@ -6,21 +6,18 @@
 #
 # SPDX-License-Identifier: GPL-2.0-only
 
-import subprocess
-import signal
-import time
-import os
-import threading
-
-from io import BytesIO
-
 import logging
+import os
+import signal
+import subprocess
+import threading
+import time
+from io import BytesIO
 
 log = logging.getLogger(__name__)
 
 
 class CmdResult(object):
-
     """
     Command execution result.
 
@@ -38,8 +35,9 @@ class CmdResult(object):
     :type pid: int
     """
 
-    def __init__(self, command="", stdout="", stderr="",
-                 exit_status=None, duration=0, pid=None):
+    def __init__(
+        self, command="", stdout="", stderr="", exit_status=None, duration=0, pid=None
+    ):
         self.command = command
         self.exit_status = exit_status
         self.stdout = stdout
@@ -49,14 +47,22 @@ class CmdResult(object):
         self.pid = pid
 
     def __repr__(self):
-        cmd_rep = ("Command: %s\n"
-                   "Exit status: %s\n"
-                   "Duration: %s\n"
-                   "Stdout:\n%s\n"
-                   "Stderr:\n%s\n"
-                   "PID:\n%s\n" % (self.command, self.exit_status,
-                                   self.duration, self.stdout, self.stderr,
-                                   self.pid))
+        cmd_rep = (
+            "Command: %s\n"
+            "Exit status: %s\n"
+            "Duration: %s\n"
+            "Stdout:\n%s\n"
+            "Stderr:\n%s\n"
+            "PID:\n%s\n"
+            % (
+                self.command,
+                self.exit_status,
+                self.duration,
+                self.stdout,
+                self.stderr,
+                self.pid,
+            )
+        )
         if self.interrupted:
             cmd_rep += "Command interrupted by %s\n" % self.interrupted
         return cmd_rep
@@ -86,7 +92,7 @@ class CmdError(Exception):
 
 class FDDrainer(object):
 
-    def __init__(self, fd, result, name=None, logger=None, logger_prefix='%s'):
+    def __init__(self, fd, result, name=None, logger=None, logger_prefix="%s"):
         """
         Reads data from a file descriptor in a thread, storing locally in
         a file-like :attr:`data` object.
@@ -117,27 +123,27 @@ class FDDrainer(object):
         """
         Read from fd, storing and optionally logging the output
         """
-        log_content = ''
+        log_content = ""
         while True:
             tmp = os.read(self.fd, 1024)
             if not tmp:
                 break
             self.data.write(tmp)
             log_content += tmp.decode()
-            if tmp.decode().endswith('\n'):
+            if tmp.decode().endswith("\n"):
                 for line in log_content.splitlines():
                     if self._logger is not None and line:
                         self._logger.debug(self._logger_prefix, line.strip())
-                log_content = ''
+                log_content = ""
 
             if log_content:
                 for line in log_content.splitlines():
                     if self._logger is not None and line:
                         self._logger.debug(self._logger_prefix, line.strip())
-                log_content = ''
+                log_content = ""
 
     def start(self):
-        self._thread_lock =  threading.Lock()
+        self._thread_lock = threading.Lock()
         self._thread = threading.Thread(target=self._drainer, name=self.name)
         self._thread.daemon = True
         self._thread.start()
@@ -146,14 +152,14 @@ class FDDrainer(object):
         self._thread.join()
         if self._logger is not None:
             for handler in self._logger.handlers:
-                file = getattr(handler, 'file', None)
+                file = getattr(handler, "file", None)
                 if file is not None:
                     os.fsync(file.fileno())
-                if hasattr(handler, 'close'):
+                if hasattr(handler, "close"):
                     handler.close()
 
-class SubProcess(object):
 
+class SubProcess(object):
     """
     Run a subprocess in the background, collecting stdout/stderr streams.
     """
@@ -184,33 +190,35 @@ class SubProcess(object):
         Can get class object with "name" or print "name"
         """
         if self._popen is None:
-            rc = '(not started)'
+            rc = "(not started)"
         elif self.result.exit_status is None:
-            rc = '(running)'
+            rc = "(running)"
         else:
             rc = self.result.exit_status
-        return '%s(cmd=%r, rc=%r)' % (self.__class__.__name__, self.cmd, rc)
+        return "%s(cmd=%r, rc=%r)" % (self.__class__.__name__, self.cmd, rc)
 
     def __str__(self):
         """
         Can get class object with print "name"
         """
         if self._popen is None:
-            rc = '(not started)'
+            rc = "(not started)"
         elif self.result.exit_status is None:
-            rc = '(running)'
+            rc = "(running)"
         else:
-            rc = '(finished with exit status=%d)' % self.result.exit_status
-        return '%s %s' % (self.cmd, rc)
+            rc = "(finished with exit status=%d)" % self.result.exit_status
+        return "%s %s" % (self.cmd, rc)
 
     def _init_subprocess(self):
         if self._popen is None:
             self.log.info("Running '%s'" % self.cmd)
             try:
-                self._popen = subprocess.Popen(self.cmd,
-                                               stdout=subprocess.PIPE,
-                                               stderr=subprocess.PIPE,
-                                               shell=self.shell)
+                self._popen = subprocess.Popen(
+                    self.cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    shell=self.shell,
+                )
             except OSError as details:
                 details.strerror += " (%s)" % self.cmd
                 raise details
@@ -221,23 +229,26 @@ class SubProcess(object):
             self._stdout_drainer = FDDrainer(
                 self._popen.stdout.fileno(),
                 self.result,
-                name = "%s" % self.cmd,
-                logger = self.log,
-                logger_prefix = "[stdout] %s")
+                name="%s" % self.cmd,
+                logger=self.log,
+                logger_prefix="[stdout] %s",
+            )
             self._stdout_drainer.start()
 
             self._stderr_drainer = FDDrainer(
                 self._popen.stderr.fileno(),
                 self.result,
-                name = "%s" % self.cmd,
-                logger = self.log,
-                logger_prefix = "[stderr] %s")
+                name="%s" % self.cmd,
+                logger=self.log,
+                logger_prefix="[stderr] %s",
+            )
             self._stderr_drainer.start()
 
             def signal_handler(signum, frame):
                 self.result.interrupted = "signal/ctrl+c"
                 self.wait()
                 signal.default_int_handler(signum, frame)
+
             try:
                 signal.signal(signal.SIGINT, signal_handler)
             except ValueError:
@@ -248,8 +259,10 @@ class SubProcess(object):
         self.result.exit_status = rc
         if self.result.duration == 0:
             self.result.duration = time.time() - self.start_time
-        self.log.info("Command '%s' finished with %s after %ss" %(self.cmd, rc,
-                 self.result.duration))
+        self.log.info(
+            "Command '%s' finished with %s after %ss"
+            % (self.cmd, rc, self.result.duration)
+        )
         self.result.pid = self._popen.pid
         self._fill_streams()
 
@@ -352,12 +365,11 @@ class SubProcess(object):
         """
         self._init_subprocess()
         (stdout, stderr) = self._popen.communicate()
-        print("subprocess communicate resturn: %s, %s" %(stdout.decode(), stderr))
+        print("subprocess communicate resturn: %s, %s" % (stdout.decode(), stderr))
         rc = self._popen.returncode
         if rc is not None:
             self._fill_results(rc)
         return rc
-
 
     def stop(self):
         """
@@ -406,13 +418,13 @@ class SubProcess(object):
         self._init_subprocess()
         if timeout is None:
             self.wait()
-#            self.communicate()
+        #            self.communicate()
         elif timeout > 0.0:
             timer = threading.Timer(timeout, timeout_handler)
             try:
                 timer.start()
                 self.wait()
-#                self.communicate()
+            #                self.communicate()
             finally:
                 timer.cancel()
 
@@ -427,7 +439,7 @@ class SubProcess(object):
                 self.poll()
 
         # If all this work fails, we're dealing with a zombie process.
-        e_msg = 'Zombie Process %s' % self._popen.pid
+        e_msg = "Zombie Process %s" % self._popen.pid
         assert self.result.exit_status is not None, e_msg
 
         return self.result

@@ -6,12 +6,11 @@
 #
 # SPDX-License-Identifier: GPL-2.0-only
 
-import re
 import os
+import re
 import time
 
 from utils import process
-
 
 SYSFS_NET_PATH = "/sys/class/net"
 
@@ -23,13 +22,14 @@ def _net_name_for_bridge(bridge):
         return None
     for name in nets.stdout.decode().split():
         info = process.run("virsh net-info %s" % name, ignore_status=True)
-        if info.exit_status == 0 and re.search(r'Bridge:\s+%s\b' % re.escape(bridge),
-                                                info.stdout.decode()):
+        if info.exit_status == 0 and re.search(
+            r"Bridge:\s+%s\b" % re.escape(bridge), info.stdout.decode()
+        ):
             return name
     return None
 
 
-def get_ip(interface='virbr0', mac=None, timeout=60):
+def get_ip(interface="virbr0", mac=None, timeout=60):
     """Return the IP address assigned to `mac` via the libvirt network
     whose bridge is `interface`, polling virsh net-dhcp-leases until
     the lease appears or `timeout` seconds elapse."""
@@ -42,7 +42,7 @@ def get_ip(interface='virbr0', mac=None, timeout=60):
         if result.exit_status == 0:
             for line in result.stdout.decode().splitlines():
                 if mac and mac.lower() in line.lower():
-                    m = re.search(r'\b(\d+\.\d+\.\d+\.\d+)/\d+', line)
+                    m = re.search(r"\b(\d+\.\d+\.\d+\.\d+)/\d+", line)
                     if m:
                         return m.group(1)
         time.sleep(2)
@@ -53,12 +53,12 @@ def macAdd(mac, step=1):
     """
     Only change the last digt of the mac_addr, add $step every time
     """
-#    dict = {'0':0, '1':1, '2':2, '3':3, '4':4,\
-#            '5':5, '6':6, '7':7, '8':8, '9':9,\
-#            'a':10, 'b':11, 'c':12, 'd':13, 'e':14, 'f':15}
+    #    dict = {'0':0, '1':1, '2':2, '3':3, '4':4,\
+    #            '5':5, '6':6, '7':7, '8':8, '9':9,\
+    #            'a':10, 'b':11, 'c':12, 'd':13, 'e':14, 'f':15}
 
-    tmp = mac.split(':')
-    last_num = len(tmp)-1
+    tmp = mac.split(":")
+    last_num = len(tmp) - 1
     new_mac = tmp[:]
     tmp[last_num] = int(tmp[last_num], 16)
     new_mac[last_num] = tmp[last_num] + int(step)
@@ -85,13 +85,12 @@ def get_remote_host_net_ifs(session, state=None):
         state = ".*"
     cmd_output = session.get_output_status(cmd)
     if cmd_output[0]:
-        raise Exception("Failed to fetch %s from remote"
-                             "machine" % cmd)
+        raise Exception("Failed to fetch %s from remote" "machine" % cmd)
     else:
         result = cmd_output[1].decode().strip()
-    host_interfaces = re.findall(r"^\d+: (\S+?)[@:].*state %s.*$" % (state),
-                                 result,
-                                 re.MULTILINE)
+    host_interfaces = re.findall(
+        r"^\d+: (\S+?)[@:].*state %s.*$" % (state), result, re.MULTILINE
+    )
     for each_path in host_interfaces:
         path = os.path.join(SYSFS_NET_PATH, each_path)
         if each_path == "lo":

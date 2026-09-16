@@ -7,25 +7,24 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
 import json
+import logging
 import os
 import re
 import socket
-import paramiko
 import time
-import logging
+
+import paramiko
 
 log = logging.getLogger(__name__)
 import random
 
-from utils import process
-from utils import config
-from utils import files
-from utils import paths
-from utils import host
+from utils import config, files, host, paths, process
 
 
 class SSHConnection(object):
-    def __init__(self, hostname, username="root", passwd="redhat", port=22, timeout=3600):
+    def __init__(
+        self, hostname, username="root", passwd="redhat", port=22, timeout=3600
+    ):
         self.hostname = hostname
         self.port = port
         self.username = username
@@ -36,17 +35,21 @@ class SSHConnection(object):
     def connect(self):
         session = paramiko.SSHClient()
         session.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        session.connect(hostname=self.hostname,
-                        username=self.username,
-                        password=self.passwd,
-                        timeout=self.timeout,
-                        allow_agent=False,
-                        look_for_keys=False)
+        session.connect(
+            hostname=self.hostname,
+            username=self.username,
+            password=self.passwd,
+            timeout=self.timeout,
+            allow_agent=False,
+            look_for_keys=False,
+        )
         self.session = session
         log.info("Connect to remote server:%s" % self.hostname)
 
     def execute_command(self, cmd, timeout=300):
-        log.info("[session] send command '%s' to %s through session" % (cmd, self.hostname))
+        log.info(
+            "[session] send command '%s' to %s through session" % (cmd, self.hostname)
+        )
         try:
             stdin, stdout, stderr = self.session.exec_command(cmd, timeout=timeout)
             stderr = stderr.read()
@@ -57,14 +60,18 @@ class SSHConnection(object):
         return stdout
 
     def get_cmd_status(self, cmd, timeout=300):
-        log.info("[session] send command '%s' to %s through session" % (cmd, self.hostname))
+        log.info(
+            "[session] send command '%s' to %s through session" % (cmd, self.hostname)
+        )
         stdin, stdout, stderr = self.session.exec_command(cmd, timeout=timeout)
         channel = stdout.channel
         status = channel.recv_exit_status()
         return status
 
     def get_output_status(self, cmd, timeout=300):
-        log.info("[session] send command '%s' to %s through session" % (cmd, self.hostname))
+        log.info(
+            "[session] send command '%s' to %s through session" % (cmd, self.hostname)
+        )
         try:
             stdin, stdout, stderr = self.session.exec_command(cmd, timeout=timeout)
             status = stdout.channel.recv_exit_status()
@@ -106,8 +113,7 @@ def wait_ssh_available(ip, time_out=120):
     return ssh_available
 
 
-def get_remote_obj(ip, username, passwd, port="22", timeout=120,
-                   wait_reboot=True):
+def get_remote_obj(ip, username, passwd, port="22", timeout=120, wait_reboot=True):
     if wait_reboot:
         # If SSH is currently reachable the VM may be mid-reboot: wait for it
         # to go down first, then wait for it to come back.
@@ -136,7 +142,7 @@ def scp_to_remote(host, username, password, local_path, remote_path, timeout=30)
     client.connect(host, username=username, password=password, timeout=timeout)
     try:
         sftp = client.open_sftp()
-        remote_file = remote_path.rstrip('/') + '/' + os.path.basename(local_path)
+        remote_file = remote_path.rstrip("/") + "/" + os.path.basename(local_path)
         sftp.put(local_path, remote_file)
         sftp.close()
         log.debug("scp_to_remote: %s → %s:%s" % (local_path, host, remote_file))
@@ -163,9 +169,13 @@ def is_installed(session, package_name):
     cmd_status = cmd_result[0]
     if cmd_status == 0:
         log.info("The package %s is installed on the host" % package_name)
-        log.info("The %s package version is %s" %(package_name, cmd_result[1].decode()))
+        log.info(
+            "The %s package version is %s" % (package_name, cmd_result[1].decode())
+        )
     else:
-        log.debug("remote_node : Do not find the package %s on the remote node" % package_name)
+        log.debug(
+            "remote_node : Do not find the package %s on the remote node" % package_name
+        )
     return cmd_status
 
 
@@ -204,42 +214,53 @@ def get_remote_hostname_ipaddress_map(session):
     cmd_status = cmd_result[0]
     remote_hostname_ipaddress_map_content = cmd_result[1].decode().strip()
     if cmd_status == 0:
-        log.info("remote_node : The know hosts content on the remote node is \n'%s' " % remote_hostname_ipaddress_map_content)
+        log.info(
+            "remote_node : The know hosts content on the remote node is \n'%s' "
+            % remote_hostname_ipaddress_map_content
+        )
         return remote_hostname_ipaddress_map_content
     else:
-        log.error("remote_node : Do not get the content of %s successfully " % hosts_file)
+        log.error(
+            "remote_node : Do not get the content of %s successfully " % hosts_file
+        )
         return None
 
 
 def map_hostname_ipaddress(session, hostname, ip_address):
     hosts_file = "/etc/hosts"
     hosts_content = get_remote_hostname_ipaddress_map(session)
-    pattern = r'%s(\s+)%s' % (ip_address, hostname)
+    pattern = r"%s(\s+)%s" % (ip_address, hostname)
     if not re.search(pattern, hosts_content):
         cmd = "echo '%s %s' >> %s" % (ip_address, hostname, hosts_file)
         log.info(cmd)
         cmd_status = session.get_cmd_status(cmd)
         if cmd_status != 0:
-            log.info("The the hostname %s and the IP address %s are not mapped in %s" % (hostname, ip_address,
-                                                                                             hosts_file))
+            log.info(
+                "The the hostname %s and the IP address %s are not mapped in %s"
+                % (hostname, ip_address, hosts_file)
+            )
             return False
         else:
             log.info("Mapping the hostname and IP address successfully")
             get_remote_hostname_ipaddress_map(session)
     else:
-        log.info("The the hostname %s and the IP address %s has already mapped in %s" % (hostname, ip_address,
-                                                                                             hosts_file))
+        log.info(
+            "The the hostname %s and the IP address %s has already mapped in %s"
+            % (hostname, ip_address, hosts_file)
+        )
     return True
 
 
 def get_remote_ssh_public_key(session, remote_ip_address, key_type="rsa"):
-    cmd = "ssh-keyscan -t %s %s" %(key_type, remote_ip_address)
-    log.info("running %s to gather %s host public key" %(cmd, remote_ip_address))
+    cmd = "ssh-keyscan -t %s %s" % (key_type, remote_ip_address)
+    log.info("running %s to gather %s host public key" % (cmd, remote_ip_address))
     cmd_result = session.get_output_status(cmd)
 
     cmd_status = cmd_result[0]
     if cmd_status == 0:
-        log.info("Get the remote node %s public ssh key successfully" % remote_ip_address)
+        log.info(
+            "Get the remote node %s public ssh key successfully" % remote_ip_address
+        )
     else:
         log.debug("Failed to get the remote node %s public ssh key" % remote_ip_address)
     return cmd_result[1].decode()
@@ -248,7 +269,9 @@ def get_remote_ssh_public_key(session, remote_ip_address, key_type="rsa"):
 def add_key_to_known_hosts(session, ip_address, key_type="rsa"):
     known_hosts_file_path = "~/.ssh/known_hosts"
     ssh_public_key = get_remote_ssh_public_key(session, ip_address, key_type)
-    cmd_status = session.get_cmd_status("echo '%s' >> %s" %(ssh_public_key,  known_hosts_file_path))
+    cmd_status = session.get_cmd_status(
+        "echo '%s' >> %s" % (ssh_public_key, known_hosts_file_path)
+    )
     if cmd_status == 0:
         log.debug("Add the %s host to known_hosts successfully" % ip_address)
     else:
@@ -272,7 +295,9 @@ def get_known_hosts_content(session):
     cmd_status = cmd_result[0]
     known_host_content = cmd_result[1].decode().strip()
     if cmd_status == 0:
-        log.info("The know hosts content is '%s' on the remote node" % known_host_content)
+        log.info(
+            "The know hosts content is '%s' on the remote node" % known_host_content
+        )
         return known_host_content
     else:
         log.error("Do not get the content of %s successfully " % known_host_path)
@@ -286,22 +311,37 @@ def set_sebool(session, local_bool_var="virt_use_nfs", local_bool_value="on"):
     # Get original SELinux boolean value, nothing to do if it equals to specified value
     local_boolean_orig = get_sebool(session, local_bool_var)
     if local_bool_value == local_boolean_orig:
-        log.info("There is nothing to do because the %s has already been %s on the remote node"
-                     % (local_bool_var, local_bool_value))
+        log.info(
+            "There is nothing to do because the %s has already been %s on the remote node"
+            % (local_bool_var, local_bool_value)
+        )
         return True
 
-    log.info("Start to setup selinux boolean value on the remote node : %s %s" % (local_bool_var, local_bool_value))
-    setup_result = session.get_cmd_status("setsebool %s %s" % (local_bool_var, local_bool_value))
+    log.info(
+        "Start to setup selinux boolean value on the remote node : %s %s"
+        % (local_bool_var, local_bool_value)
+    )
+    setup_result = session.get_cmd_status(
+        "setsebool %s %s" % (local_bool_var, local_bool_value)
+    )
     if setup_result != 0:
-        log.info("Do not setup the selinux boolean value of %s successfully" % local_bool_var)
+        log.info(
+            "Do not setup the selinux boolean value of %s successfully" % local_bool_var
+        )
         return False
 
     boolean_curr = get_sebool(session, local_bool_var)
     if boolean_curr != local_bool_value:
-        log.debug("remote_node : The current selinux boolean value of %s is not right" % local_bool_var)
+        log.debug(
+            "remote_node : The current selinux boolean value of %s is not right"
+            % local_bool_var
+        )
         return False
     else:
-        log.info("remote_node : Setup selinux boolean value successfully : %s %s " % (local_bool_var, local_bool_value))
+        log.info(
+            "remote_node : Setup selinux boolean value successfully : %s %s "
+            % (local_bool_var, local_bool_value)
+        )
         return True
 
 
@@ -312,7 +352,10 @@ def get_sebool(session, local_bool_var="virt_use_nfs"):
     get_sebool_cmd = "getsebool %s | awk -F'-->' '{print $2}'" % local_bool_var
 
     result = session.execute_command(get_sebool_cmd).decode().strip()
-    log.info("On the remote node, the current selinux boolean value of %s is '%s'" %(local_bool_var, result))
+    log.info(
+        "On the remote node, the current selinux boolean value of %s is '%s'"
+        % (local_bool_var, result)
+    )
     return result
 
 
@@ -320,7 +363,7 @@ def mount(session, src_ip_address, src_dir, dst, mount_type="nfs"):
     mount_cmd = "mount"
     src = src_ip_address + ":" + src_dir
     if is_mount(session, src_ip_address, src_dir, dst):
-        log.info("No need to mount %s to %s again" %(src,dst))
+        log.info("No need to mount %s to %s again" % (src, dst))
         return True
     if mount_type:
         mount_cmd = mount_cmd + " -t " + mount_type
@@ -333,30 +376,36 @@ def mount(session, src_ip_address, src_dir, dst, mount_type="nfs"):
     mount_status = mount_result[0]
     mount_output = mount_result[1].decode()
     if mount_status == 0:
-        log.info("remote_node : Mount %s on the %s successfully" %(src, dst))
+        log.info("remote_node : Mount %s on the %s successfully" % (src, dst))
         return True
     else:
         log.error(mount_output)
-        log.error("remote_node : Do not mount %s on the %s successfully" %(src, dst))
+        log.error("remote_node : Do not mount %s on the %s successfully" % (src, dst))
         return False
 
 
 def is_mount(session, src_ip_address, src_dir, dst):
-    mount_str=src_ip_address + ":" + src_dir + " " + dst
+    mount_str = src_ip_address + ":" + src_dir + " " + dst
     mount_result = session.execute_command("cat /proc/mounts")
     for result in mount_result.decode().splitlines():
         if mount_str in result:
-            log.debug("remote_node : The %s of %s is mounted currently" %(src_dir, src_ip_address))
+            log.debug(
+                "remote_node : The %s of %s is mounted currently"
+                % (src_dir, src_ip_address)
+            )
             return True
 
-    log.debug("remote_node : The %s of %s is not  mounted currently" %(src_dir, src_ip_address))
+    log.debug(
+        "remote_node : The %s of %s is not  mounted currently"
+        % (src_dir, src_ip_address)
+    )
     return False
 
 
 def umount(session, src_ip_address, src_dir, dst):
     src = src_ip_address + ":" + src_dir
     if not is_mount(session, src_ip_address, src_dir, dst):
-        log.debug("remote_node : No need to umount the %s from %s again" %(src, dst))
+        log.debug("remote_node : No need to umount the %s from %s again" % (src, dst))
     else:
         umount_cmd = "umount -f %s" % dst
         time.sleep(3)
@@ -382,9 +431,11 @@ def get_exported_nfs_fs_info(session):
     return exported_nfs_info
 
 
-def export_share_nfs_dir(session, export_dir, export_options, export_ip, backup_filename):
+def export_share_nfs_dir(
+    session, export_dir, export_options, export_ip, backup_filename
+):
     session.get_cmd_status("cat /etc/exports > %s" % backup_filename)
-    exports_str = "%s %s(%s)" %(export_dir, export_ip, export_options)
+    exports_str = "%s %s(%s)" % (export_dir, export_ip, export_options)
     session.get_cmd_status("echo '%s' > /etc/exports" % exports_str)
     get_exports_file_content(session)
 
@@ -435,24 +486,30 @@ def get_ssh_public_key(session):
     rsa_public_key_path = "~/.ssh/id_rsa.pub"
     rsa_private_key_path = "~/.ssh/id_rsa"
 
-    has_rsa_keypair = session.get_cmd_status("cat %s & cat %s" % (rsa_public_key_path, rsa_private_key_path))
-    has_dsa_keypair = session.get_cmd_status("cat %s & cat %s" % (dsa_public_key_path, dsa_private_key_path))
+    has_rsa_keypair = session.get_cmd_status(
+        "cat %s & cat %s" % (rsa_public_key_path, rsa_private_key_path)
+    )
+    has_dsa_keypair = session.get_cmd_status(
+        "cat %s & cat %s" % (dsa_public_key_path, dsa_private_key_path)
+    )
 
     if has_rsa_keypair == 0:
-        log.info('RSA keypair found, using it')
+        log.info("RSA keypair found, using it")
         public_key_path = rsa_public_key_path
 
     elif has_dsa_keypair == 0:
-        log.info('DSA keypair found, using it')
+        log.info("DSA keypair found, using it")
         public_key_path = dsa_public_key_path
 
     else:
-        log.info('Neither RSA nor DSA keypair found, creating RSA ssh key pair')
+        log.info("Neither RSA nor DSA keypair found, creating RSA ssh key pair")
         public_key_path = rsa_public_key_path
         ssh_key_type = "rsa"
         generate_ssh_key(session, ssh_key_type, rsa_private_key_path)
 
-    public_key_str = session.execute_command("cat %s" % public_key_path).decode().strip()
+    public_key_str = (
+        session.execute_command("cat %s" % public_key_path).decode().strip()
+    )
     return public_key_str
 
 
@@ -463,27 +520,40 @@ def get_ssh_key_type(session):
     rsa_public_key_path = "~/.ssh/id_rsa.pub"
     rsa_private_key_path = "~/.ssh/id_rsa"
 
-    has_rsa_keypair = session.get_cmd_status("cat %s & cat %s" % (rsa_public_key_path, rsa_private_key_path))
-    has_dsa_keypair = session.get_cmd_status("cat %s & cat %s" % (dsa_public_key_path, dsa_private_key_path))
+    has_rsa_keypair = session.get_cmd_status(
+        "cat %s & cat %s" % (rsa_public_key_path, rsa_private_key_path)
+    )
+    has_dsa_keypair = session.get_cmd_status(
+        "cat %s & cat %s" % (dsa_public_key_path, dsa_private_key_path)
+    )
 
     if has_rsa_keypair == 0:
-        log.info('RSA keypair is found')
+        log.info("RSA keypair is found")
         ssh_key_type = "rsa"
     elif has_dsa_keypair == 0:
-        log.info('DSA keypair is found')
+        log.info("DSA keypair is found")
         ssh_key_type = "dsa"
     else:
-        log.error('Neither RSA nor DSA keypair is found, starting to generate RSA type key  pair now')
+        log.error(
+            "Neither RSA nor DSA keypair is found, starting to generate RSA type key  pair now"
+        )
         ssh_key_type = "rsa"
         generate_ssh_key(session, ssh_key_type, rsa_private_key_path)
     return ssh_key_type
 
 
 def generate_ssh_key(session, ssh_key_type, private_key_path):
-    return session.get_cmd_status('ssh-keygen -t %s -q -N "" -f %s' %(ssh_key_type, private_key_path)) == 0
+    return (
+        session.get_cmd_status(
+            'ssh-keygen -t %s -q -N "" -f %s' % (ssh_key_type, private_key_path)
+        )
+        == 0
+    )
 
 
-def authorise_ssh_logins(session, remote_ip_address, remote_user="root", remote_password="passw0rd"):
+def authorise_ssh_logins(
+    session, remote_ip_address, remote_user="root", remote_password="passw0rd"
+):
     """
     Setup up remote login in another server by using public key
 
@@ -498,13 +568,23 @@ def authorise_ssh_logins(session, remote_ip_address, remote_user="root", remote_
         arch = session.execute_command("arch").decode().strip()
         install_sshpass_rpm(session, arch)
     log.info(get_ssh_public_key(session))
-    ssh_key_setup_cmd = "sshpass -p %s ssh-copy-id -o PubkeyAuthentication=no %s@%s" %(remote_password, remote_user, remote_ip_address)
+    ssh_key_setup_cmd = "sshpass -p %s ssh-copy-id -o PubkeyAuthentication=no %s@%s" % (
+        remote_password,
+        remote_user,
+        remote_ip_address,
+    )
     log.info("remote node : running the %s cmd" % ssh_key_setup_cmd)
     cmd_status = session.get_cmd_status(ssh_key_setup_cmd)
     if cmd_status == 0:
-        log.debug("remote_node : use available keys to authorise logins on %s host" % remote_ip_address)
+        log.debug(
+            "remote_node : use available keys to authorise logins on %s host"
+            % remote_ip_address
+        )
     else:
-        log.error("remote_node : use available keys to authorise logins on %s host" % remote_ip_address)
+        log.error(
+            "remote_node : use available keys to authorise logins on %s host"
+            % remote_ip_address
+        )
 
 
 def backup_file(session, original_file, backup_file):
@@ -513,31 +593,44 @@ def backup_file(session, original_file, backup_file):
     backup_file_result = session.get_output_status(cmd)
     backup_file_status = backup_file_result[0]
     if backup_file_status == 0:
-        log.debug("remote_node : backup the %s file as %s file successfully:" % (original_file, backup_file))
+        log.debug(
+            "remote_node : backup the %s file as %s file successfully:"
+            % (original_file, backup_file)
+        )
         return True
     else:
-        log.error("remote_node : Fail to backup the %s file as %s file" % (original_file, backup_file))
+        log.error(
+            "remote_node : Fail to backup the %s file as %s file"
+            % (original_file, backup_file)
+        )
         return False
 
 
 def restore_file(session, backup_file, original_file):
-    cmd = "mv -f %s %s" %(backup_file, original_file)
+    cmd = "mv -f %s %s" % (backup_file, original_file)
     log.info("Run the '%s' cmd on the remote node" % cmd)
     restore_file_result = session.get_output_status(cmd)
     restore_file_status = restore_file_result[0]
 
     if restore_file_status == 0:
-        log.debug("remote_node : Restore the %s from the backup file successfully" % backup_file)
+        log.debug(
+            "remote_node : Restore the %s from the backup file successfully"
+            % backup_file
+        )
         return True
     else:
-        log.error("remote_node : Fail to restore the %s from the backup file successfully" % backup_file)
+        log.error(
+            "remote_node : Fail to restore the %s from the backup file successfully"
+            % backup_file
+        )
         return False
 
 
 def create_vf(session, pf_addrs, numvfs=1, check_mac_address_flag=True):
     pf_address = pf_addrs[-1].replace(":", r"\:")
     session.get_cmd_status(
-        "echo %d > /sys/bus/pci/devices/%s/sriov_numvfs" % (int(numvfs), pf_address))
+        "echo %d > /sys/bus/pci/devices/%s/sriov_numvfs" % (int(numvfs), pf_address)
+    )
     time.sleep(int(numvfs) + 1)
     vf_list = get_vf_list(session, pf_address)
     if check_mac_address_flag:
@@ -554,7 +647,8 @@ def create_two_vfs_two_pfs(session, pf_addrs, numvfs=1, check_mac_address_flag=T
     for pf_addr in pf_addrs:
         pf_esc = pf_addr.replace(":", r"\:")
         session.get_cmd_status(
-            "echo %d > /sys/bus/pci/devices/%s/sriov_numvfs" % (int(numvfs), pf_esc))
+            "echo %d > /sys/bus/pci/devices/%s/sriov_numvfs" % (int(numvfs), pf_esc)
+        )
         time.sleep(int(numvfs) + 1)
         vf_address = get_vf_list(session, pf_esc)[0]
         vf_list.append(vf_address)
@@ -590,18 +684,23 @@ def send_rarp(session, interface, mac, count=3, log=None):
         "s.close()"
     ) % (interface, mac.replace(":", ""), count)
 
-    cmd = "python3 -c \"%s\"" % script
+    cmd = 'python3 -c "%s"' % script
     rc = session.get_cmd_status(cmd)
     if log:
         if rc == 0:
-            log.info("RARP sent on %s for VF MAC %s (%d frames)" % (interface, mac, count))
+            log.info(
+                "RARP sent on %s for VF MAC %s (%d frames)" % (interface, mac, count)
+            )
         else:
-            log.warning("Failed to send RARP on %s for VF MAC %s (rc=%d)" % (interface, mac, rc))
+            log.warning(
+                "Failed to send RARP on %s for VF MAC %s (rc=%d)" % (interface, mac, rc)
+            )
     return rc == 0
 
 
 class _RemoteBackend:
     """Implements the sysfs query interface over an SSH session."""
+
     def __init__(self, session):
         self._s = session
 
@@ -618,8 +717,12 @@ class _RemoteBackend:
         return out if out else None
 
     def path_exists(self, path):
-        return self._s.execute_command(
-            "test -e %s && echo yes || echo no" % path).decode().strip() == 'yes'
+        return (
+            self._s.execute_command("test -e %s && echo yes || echo no" % path)
+            .decode()
+            .strip()
+            == "yes"
+        )
 
     def run_lspci(self, addr):
         out = self._s.execute_command("lspci -vmm -s %s 2>/dev/null" % addr).decode()
@@ -650,10 +753,13 @@ def get_vf_list(session, pci_addr):
     return vf_list
 
 
-
-def define_vm_failover_vf_network(session, pf_interface_name, tgt_ip, tgt_username, tgt_passwd):
+def define_vm_failover_vf_network(
+    session, pf_interface_name, tgt_ip, tgt_username, tgt_passwd
+):
     original_vf_xml = paths.XML_DIR + "/failover_vf_net.xml"
-    tmp_vf_xml = os.path.join(paths.TEST_DIR, "failover_%s_net_tgt.xml" % pf_interface_name)
+    tmp_vf_xml = os.path.join(
+        paths.TEST_DIR, "failover_%s_net_tgt.xml" % pf_interface_name
+    )
     net_name = "failover-vf"
     if is_persistent_vm_network(session, net_name):
         undefine_cmd = "/bin/virsh net-undefine %s" % net_name
@@ -664,15 +770,21 @@ def define_vm_failover_vf_network(session, pf_interface_name, tgt_ip, tgt_userna
     files.create(tmp_vf_xml)
     files.replace(original_vf_xml, tmp_vf_xml, "INTERFACE", pf_interface_name)
     scp_to_remote(tgt_ip, tgt_username, tgt_passwd, tmp_vf_xml, "/tmp/")
-    define_cmd = "/bin/virsh net-define /tmp/failover_%s_net_tgt.xml" % pf_interface_name
+    define_cmd = (
+        "/bin/virsh net-define /tmp/failover_%s_net_tgt.xml" % pf_interface_name
+    )
     session.execute_command(define_cmd)
     start_cmd = "/bin/virsh net-start %s" % net_name
     session.execute_command(start_cmd)
 
 
-def define_vm_failover_vf_network_multi(session, pf_interface_name, tgt_ip, tgt_username, tgt_passwd):
+def define_vm_failover_vf_network_multi(
+    session, pf_interface_name, tgt_ip, tgt_username, tgt_passwd
+):
     original_vf_xml = paths.XML_DIR + "/failover_vf_net_multi.xml"
-    tmp_vf_xml = os.path.join(paths.TEST_DIR, "failover_%s_net_tgt_multi.xml" % pf_interface_name)
+    tmp_vf_xml = os.path.join(
+        paths.TEST_DIR, "failover_%s_net_tgt_multi.xml" % pf_interface_name
+    )
     net_name = "failover-vf1"
     if is_persistent_vm_network(session, net_name):
         undefine_cmd = "/bin/virsh net-undefine %s" % net_name
@@ -683,7 +795,9 @@ def define_vm_failover_vf_network_multi(session, pf_interface_name, tgt_ip, tgt_
     files.create(tmp_vf_xml)
     files.replace(original_vf_xml, tmp_vf_xml, "INTERFACE", pf_interface_name)
     scp_to_remote(tgt_ip, tgt_username, tgt_passwd, tmp_vf_xml, "/tmp/")
-    define_cmd = "/bin/virsh net-define /tmp/failover_%s_net_tgt_multi.xml" % pf_interface_name
+    define_cmd = (
+        "/bin/virsh net-define /tmp/failover_%s_net_tgt_multi.xml" % pf_interface_name
+    )
     session.execute_command(define_cmd)
     start_cmd = "/bin/virsh net-start %s" % net_name
     session.execute_command(start_cmd)
@@ -748,14 +862,18 @@ def disable_vf(session, pf_addrs, all_pfs=False):
     for pf_addr in targets:
         pf_esc = pf_addr.replace(":", r"\:")
         cmd_status = session.get_cmd_status(
-            "echo 0 > /sys/bus/pci/devices/%s/sriov_numvfs" % pf_esc)
+            "echo 0 > /sys/bus/pci/devices/%s/sriov_numvfs" % pf_esc
+        )
     return cmd_status
 
 
 def create_vf_only(session, pf_address, numvfs):
     disable_vf_cmd = "echo 0 > /sys/bus/pci/devices/%s/sriov_numvfs" % pf_address
-    session.get_cmd_status(disable_vf_cmd )
-    create_vf_cmd = "echo %d > /sys/bus/pci/devices/%s/sriov_numvfs" % (int(numvfs), pf_address)
+    session.get_cmd_status(disable_vf_cmd)
+    create_vf_cmd = "echo %d > /sys/bus/pci/devices/%s/sriov_numvfs" % (
+        int(numvfs),
+        pf_address,
+    )
     session.get_cmd_status(create_vf_cmd)
 
 
@@ -766,12 +884,39 @@ def destroy_vf_only(session, pf_address):
 
 def setup_vf_mac_address(session, pf_name, index, is_ib=False):
     if is_ib:
-        mac = [0x52, 0x54, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-               0x00, random.randint(0x00, 0xff), random.randint(0x00, 0xff)]
-        random_mac_address = ':'.join(map(lambda x: "%02x" % x, mac))
+        mac = [
+            0x52,
+            0x54,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            random.randint(0x00, 0xFF),
+            random.randint(0x00, 0xFF),
+        ]
+        random_mac_address = ":".join(map(lambda x: "%02x" % x, mac))
     else:
-        mac = [0x52, 0x54, 0x00, random.randint(0x00, 0x7f), random.randint(0x00, 0xff), random.randint(0x00, 0xff)]
-        random_mac_address = ':'.join(map(lambda x: "%02x" % x, mac))
+        mac = [
+            0x52,
+            0x54,
+            0x00,
+            random.randint(0x00, 0x7F),
+            random.randint(0x00, 0xFF),
+            random.randint(0x00, 0xFF),
+        ]
+        random_mac_address = ":".join(map(lambda x: "%02x" % x, mac))
     cmd = "ip link set %s vf %s mac %s" % (pf_name, index, random_mac_address)
     session.get_cmd_status(cmd)
     return random_mac_address
@@ -782,7 +927,10 @@ def unbind_driver(session, pci_address, driver="mlx5_core"):
     log.info(cmd)
     status, output = session.get_output_status(cmd)
     if status != 0:
-        log.error("Failed to unbind %s from %s due to: '%s'" % (pci_address, driver, output.decode().strip()))
+        log.error(
+            "Failed to unbind %s from %s due to: '%s'"
+            % (pci_address, driver, output.decode().strip())
+        )
         return False
 
     log.info("The %s is unbound from %s" % (pci_address, driver))
@@ -823,8 +971,13 @@ def show_devlink_port(session):
 
 def get_devlink_port_index(session, pci_address):
     devlink_port_info = show_devlink_port(session)
-    devlink_port_index_list = re.findall(r'(pci/%s/\d+)' % pci_address, devlink_port_info)
-    log.info("the devlink port index list of %s is %s" % (pci_address, devlink_port_index_list))
+    devlink_port_index_list = re.findall(
+        r"(pci/%s/\d+)" % pci_address, devlink_port_info
+    )
+    log.info(
+        "the devlink port index list of %s is %s"
+        % (pci_address, devlink_port_index_list)
+    )
     return devlink_port_index_list
 
 
@@ -846,7 +999,7 @@ def nodedev_detach(session, device_address, driver=""):
     bus = pci_addr_list[1]
     slot = pci_addr_list[2].split(".")[0]
     function = pci_addr_list[2].split(".")[1]
-    node_device_address = "pci"+"_"+domain+"_"+bus+"_"+slot+"_"+function
+    node_device_address = "pci" + "_" + domain + "_" + bus + "_" + slot + "_" + function
     cmd_str = "virsh nodedev-detach %s" % node_device_address
     if driver:
         cmd_str = cmd_str + " --driver " + driver
@@ -863,7 +1016,9 @@ def is_driver(session, pci_address_list, expected_driver):
     for pci_address in pci_address_list:
         cmd = "readlink -f /sys/bus/pci/devices/%s/driver" % pci_address
         driver_patch = session.get_output_status(cmd)[1].decode()
-        driver_name = re.match(r'(/sys/bus/pci/drivers/(.*))', driver_patch).group(2).strip()
+        driver_name = (
+            re.match(r"(/sys/bus/pci/drivers/(.*))", driver_patch).group(2).strip()
+        )
         log.info("The %s's current driver : %s" % (pci_address, expected_driver))
         if driver_name != expected_driver:
             log.error("%s's driver is not %s" % (pci_address, expected_driver))
@@ -909,8 +1064,10 @@ def configure_ip_address(session, interface, ip_address):
     # cmd = "ip addr add %s/24 dev %s" % (ip_address, interface)
     if is_nm_connection(session, interface):
         delete_nm_connection(session, interface)
-    cmd = "nmcli connection add type ethernet ifname %s con-name %s ipv4.method manual ipv4.addresses %s/24" \
-          % (interface, interface, ip_address)
+    cmd = (
+        "nmcli connection add type ethernet ifname %s con-name %s ipv4.method manual ipv4.addresses %s/24"
+        % (interface, interface, ip_address)
+    )
     log.info(cmd)
     cmd_result = session.get_output_status(cmd)
     cmd_status = cmd_result[0]
@@ -928,9 +1085,9 @@ def configure_ip_address(session, interface, ip_address):
 def get_interface_ip_address(session, interface):
     cmd = "ip addr show %s" % interface
     interface_info = session.execute_command(cmd).decode()
-    ip_address = re.search(r'inet\s+(\d+\.\d+\.\d+\.\d+)', interface_info)
+    ip_address = re.search(r"inet\s+(\d+\.\d+\.\d+\.\d+)", interface_info)
     if ip_address:
-        log.info("The %s's ip address is : %s" %(interface, ip_address.group(1)))
+        log.info("The %s's ip address is : %s" % (interface, ip_address.group(1)))
         return ip_address.group(1)
     return None
 
@@ -949,7 +1106,9 @@ def migrate(session, domain, dest_ip_address, option="--live"):
         log.error("remote: Fail to migrate the %s due to %s" % (domain, cmd_output))
         return False
     else:
-        log.info("remote: migrate the %s to %s successfully" % (domain, dest_ip_address))
+        log.info(
+            "remote: migrate the %s to %s successfully" % (domain, dest_ip_address)
+        )
         return True
 
 
@@ -973,7 +1132,11 @@ def check_domain_jobinfo(session, domain_name, option="--completed"):
 
 
 def migrate_set_capability(session, domain, capability, state):
-    cmd = "virsh qemu-monitor-command %s --hmp 'migrate_set_capability %s %s'" % (domain, capability, state)
+    cmd = "virsh qemu-monitor-command %s --hmp 'migrate_set_capability %s %s'" % (
+        domain,
+        capability,
+        state,
+    )
     return session.execute_command(cmd).decode()
 
 
@@ -984,7 +1147,9 @@ def migrate_setmaxdowntime(session, domain, downtime):
         log.error("remote: Fail to setup the %s's downtime to %s" % (domain, downtime))
         return False
     else:
-        log.info("remote: setup the %s's downtime to %s successfully" % (domain, downtime))
+        log.info(
+            "remote: setup the %s's downtime to %s successfully" % (domain, downtime)
+        )
         return True
 
 
@@ -1017,7 +1182,7 @@ def has_domain(session, domain_name):
 def is_domain_running(session, domain_name):
     if has_domain(session, domain_name):
         domain_state = get_domain_state(session, domain_name)
-        if domain_state == 'running':
+        if domain_state == "running":
             return True
     return False
 
@@ -1029,7 +1194,7 @@ def destroy_domain(session, domain_name):
 
 
 def qemu_monitor_command(session, domain_name, cmd, option="--hmp"):
-    cmd = "virsh qemu-monitor-command %s %s %s" %(option, domain_name, cmd)
+    cmd = "virsh qemu-monitor-command %s %s %s" % (option, domain_name, cmd)
     cmd_result = session.execute_command(cmd).decode()
     return cmd_result
 
@@ -1058,12 +1223,16 @@ def get_migration_parameters(session, domain_name):
             parameter = [n.strip() for n in parameter.split(":")]
             migration_parameters_list.append(parameter)
     migration_parameters_dict = dict(migration_parameters_list)
-    log.debug("The migration parameters info dictionary : %s" % migration_parameters_dict)
+    log.debug(
+        "The migration parameters info dictionary : %s" % migration_parameters_dict
+    )
     return migration_parameters_dict
 
 
 def get_migration_capabilities(session, domain_name):
-    cmd = "virsh qemu-monitor-command %s --hmp 'info migrate_capabilities'" % domain_name
+    cmd = (
+        "virsh qemu-monitor-command %s --hmp 'info migrate_capabilities'" % domain_name
+    )
     migration_capabilities_info = session.execute_command(cmd).decode().strip()
     log.info(migration_capabilities_info)
     migration_capabilities_list = []
@@ -1072,7 +1241,9 @@ def get_migration_capabilities(session, domain_name):
             capability = [n.strip() for n in capability.split(":")]
             migration_capabilities_list.append(capability)
     migration_capabilities_dict = dict(migration_capabilities_list)
-    log.debug("The migration capabilities info dictionary : %s" % migration_capabilities_dict)
+    log.debug(
+        "The migration capabilities info dictionary : %s" % migration_capabilities_dict
+    )
     return migration_capabilities_dict
 
 
@@ -1129,9 +1300,9 @@ def get_current_kernel_package(session, arch="x86_64"):
 def get_os_version(session):
     os_details = session.execute_command("cat /etc/os-release").decode().strip()
     for line in os_details.splitlines():
-        if line.startswith('VERSION_ID='):
-            ver_str = line.split('=')[1].strip().strip('"')
-            major_version = ver_str.split('.')[0]
+        if line.startswith("VERSION_ID="):
+            ver_str = line.split("=")[1].strip().strip('"')
+            major_version = ver_str.split(".")[0]
             return f"RHEL{major_version}"
 
 
@@ -1139,8 +1310,8 @@ def install_brew_package(session):
     log.info("start to install the brewkoji package")
     update_ca_cmd = """
     curl -kL 'https://certs.corp.redhat.com/RH-IT-Root-CA.crt' -o /etc/pki/ca-trust/source/anchors/RH-IT-Root-CA.crt  &
-    curl -kL 'https://engineering.redhat.com/Eng-CA.crt' -o /etc/pki/ca-trust/source/anchors/Eng-CA.crt & 
-    update-ca-trust enable & 
+    curl -kL 'https://engineering.redhat.com/Eng-CA.crt' -o /etc/pki/ca-trust/source/anchors/Eng-CA.crt &
+    update-ca-trust enable &
     update-ca-trust extract
     """
     session.execute_command(update_ca_cmd)
@@ -1152,7 +1323,10 @@ def install_brew_package(session):
         update_repo_cmd = "dnf config-manager --add-repo http://download.devel.redhat.com/rel-eng/RCMTOOLS/rcm-tools-rhel-9-baseos.repo"
     else:
         update_repo_cmd = "dnf config-manager --add-repo http://download.devel.redhat.com/rel-eng/RCMTOOLS/rcm-tools-rhel-10-baseos.repo"
-    log.debug("Installing the brew package in the %s + %s" % (os_version, current_kernel_version))
+    log.debug(
+        "Installing the brew package in the %s + %s"
+        % (os_version, current_kernel_version)
+    )
     session.execute_command(update_repo_cmd)
     brewkoji_cmd = "dnf install brewkoji -y"
     install_brewkoji_cmd_result = session.get_output_status(brewkoji_cmd)
@@ -1181,13 +1355,20 @@ def install_ovs_package(session, ovs_package="openvswitch3.6", arch="x86_64"):
         ovs_tag = "fast-datapath-rhel-10-candidate"
     else:
         ovs_tag = "fast-datapath-rhel-8-candidate"
-    get_ovs_build_name_cmd = "brew latest-build %s %s --quiet|cut -d ' ' -f 1" % (ovs_tag, ovs_package)
+    get_ovs_build_name_cmd = "brew latest-build %s %s --quiet|cut -d ' ' -f 1" % (
+        ovs_tag,
+        ovs_package,
+    )
     ovs_build_name = session.execute_command(get_ovs_build_name_cmd).decode().strip()
     log.info("The openvswitch package is : %s" % ovs_build_name)
     ovs_package_dir = "/home/%s" % ovs_build_name
     session.execute_command("mkdir -p %s" % ovs_package_dir)
     time.sleep(1)
-    download_build_cmd = "cd %s && brew download-build %s --arch=%s " % (ovs_package_dir, ovs_build_name, arch)
+    download_build_cmd = "cd %s && brew download-build %s --arch=%s " % (
+        ovs_package_dir,
+        ovs_build_name,
+        arch,
+    )
 
     download_build_cmd_result = session.get_output_status(download_build_cmd)
     time.sleep(5)
@@ -1224,13 +1405,20 @@ def install_ovs_selinux_policy_package(session, arch="noarch"):
         ovs_tag = "fast-datapath-rhel-10-candidate"
     else:
         ovs_tag = "fast-datapath-rhel-8-candidate"
-    get_ovs_build_name_cmd = "brew latest-build %s openvswitch-selinux-extra-policy --quiet|cut -d ' ' -f 1" % ovs_tag
+    get_ovs_build_name_cmd = (
+        "brew latest-build %s openvswitch-selinux-extra-policy --quiet|cut -d ' ' -f 1"
+        % ovs_tag
+    )
     ovs_build_name = session.execute_command(get_ovs_build_name_cmd).decode().strip()
     log.info("The openvswitch-selinux-extra-policy package is : %s" % ovs_build_name)
     ovs_package_dir = "/home/%s" % ovs_build_name
     session.execute_command("mkdir -p %s" % ovs_package_dir)
     time.sleep(1)
-    download_build_cmd = "cd %s && brew download-build %s --arch=%s " % (ovs_package_dir, ovs_build_name, arch)
+    download_build_cmd = "cd %s && brew download-build %s --arch=%s " % (
+        ovs_package_dir,
+        ovs_build_name,
+        arch,
+    )
     download_build_cmd_result = session.get_output_status(download_build_cmd)
     time.sleep(5)
     download_build_status = download_build_cmd_result[0]
@@ -1268,7 +1456,9 @@ def create_ovs(session, ovs_name, create_ovs_script, ovs_version="3.6"):
         install_ovs_result = install_ovs_package(session)
         if not install_ovs_result:
             return False
-    create_ovs_cmd_result = session.get_output_status("bash %s %s" % (create_ovs_script, ovs_name))
+    create_ovs_cmd_result = session.get_output_status(
+        "bash %s %s" % (create_ovs_script, ovs_name)
+    )
     time.sleep(5)
     create_ovs_status = create_ovs_cmd_result[0]
     if create_ovs_status != 0:
@@ -1299,7 +1489,11 @@ def show_ovs(session):
 
 
 def get_switchdev_pf_ifname_list(session, pci_address):
-    ifname_info = session.execute_command("ls /sys/bus/pci/devices/%s/net/" % pci_address).decode().strip()
+    ifname_info = (
+        session.execute_command("ls /sys/bus/pci/devices/%s/net/" % pci_address)
+        .decode()
+        .strip()
+    )
     ifname_list = ifname_info.splitlines() if ifname_info else []
     return ifname_list
 
@@ -1348,7 +1542,10 @@ def setup_mlx_switchdev_mode(session, pf_address):
 def enable_vf_migration(session, pf_address, vf_index=0):
     log.info("Enabling migration on VF %d of %s" % (vf_index, pf_address))
 
-    cmd = "devlink port function set pci/%s/%d migratable enable" % (pf_address, vf_index + 1)
+    cmd = "devlink port function set pci/%s/%d migratable enable" % (
+        pf_address,
+        vf_index + 1,
+    )
     status = session.get_cmd_status(cmd)
     if status != 0:
         log.error("Failed to enable migration on VF")

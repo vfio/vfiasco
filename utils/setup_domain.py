@@ -33,23 +33,22 @@ import textwrap
 # Add project root to path so utils/config is importable when run directly.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils import config
-from utils import paths
+from utils import config, paths
 
 # Per-architecture defaults.
 ARCH_MACHINE_TYPE = {
-    "x86_64":  "q35",
+    "x86_64": "q35",
     "aarch64": "virt",
 }
 
 MACHINE_BIOS = {
-    "pc":   "seabios",
-    "q35":  "ovmf",
+    "pc": "seabios",
+    "q35": "ovmf",
     "virt": "ovmf",
 }
 
 ARCH_VALID_MACHINE_TYPES = {
-    "x86_64":  {"q35", "pc"},
+    "x86_64": {"q35", "pc"},
     "aarch64": {"virt"},
 }
 
@@ -57,7 +56,7 @@ DISTRO_CONFIG = {
     "centos10": {
         "base_image": "centos10-base-{arch}.qcow2",
         "image_url": {
-            "x86_64":  "https://cloud.centos.org/centos/10-stream/x86_64/images/CentOS-Stream-GenericCloud-10-latest.x86_64.qcow2",
+            "x86_64": "https://cloud.centos.org/centos/10-stream/x86_64/images/CentOS-Stream-GenericCloud-10-latest.x86_64.qcow2",
             "aarch64": "https://cloud.centos.org/centos/10-stream/aarch64/images/CentOS-Stream-GenericCloud-10-20250904.0.aarch64.qcow2",
         },
         "install_packages": True,
@@ -67,7 +66,7 @@ DISTRO_CONFIG = {
     "rhel10": {
         "base_image": "rhel10-base-{arch}.qcow2",
         "image_url": {
-            "x86_64":  "https://download.eng.brq.redhat.com/rhel-10/nightly/RHEL-10/latest-RHEL-10/compose/BaseOS/x86_64/images/rhel-guest-image-*.x86_64.qcow2",
+            "x86_64": "https://download.eng.brq.redhat.com/rhel-10/nightly/RHEL-10/latest-RHEL-10/compose/BaseOS/x86_64/images/rhel-guest-image-*.x86_64.qcow2",
             "aarch64": "https://download.eng.brq.redhat.com/rhel-10/nightly/RHEL-10/latest-RHEL-10/compose/BaseOS/aarch64/images/rhel-guest-image-*.aarch64.qcow2",
         },
         "generate_repo": True,
@@ -76,7 +75,7 @@ DISTRO_CONFIG = {
     "ubuntu2604": {
         "base_image": "ubuntu2604-base-{arch}.qcow2",
         "image_url": {
-            "x86_64":  "https://cloud-images.ubuntu.com/resolute/current/resolute-server-cloudimg-amd64.img",
+            "x86_64": "https://cloud-images.ubuntu.com/resolute/current/resolute-server-cloudimg-amd64.img",
             "aarch64": "https://cloud-images.ubuntu.com/resolute/current/resolute-server-cloudimg-arm64.img",
         },
         "install_packages": True,
@@ -85,7 +84,7 @@ DISTRO_CONFIG = {
     "debian13": {
         "base_image": "debian13-base-{arch}.qcow2",
         "image_url": {
-            "x86_64":  "https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2",
+            "x86_64": "https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2",
             "aarch64": "https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-arm64.qcow2",
         },
         "install_packages": True,
@@ -94,7 +93,7 @@ DISTRO_CONFIG = {
     "rhel9": {
         "base_image": "rhel9-base-{arch}.qcow2",
         "image_url": {
-            "x86_64":  "https://download.eng.brq.redhat.com/rhel-9/nightly/RHEL-9/latest-RHEL-9/compose/BaseOS/x86_64/images/rhel-guest-image-*.x86_64.qcow2",
+            "x86_64": "https://download.eng.brq.redhat.com/rhel-9/nightly/RHEL-9/latest-RHEL-9/compose/BaseOS/x86_64/images/rhel-guest-image-*.x86_64.qcow2",
             "aarch64": "https://download.eng.brq.redhat.com/rhel-9/nightly/RHEL-9/latest-RHEL-9/compose/BaseOS/aarch64/images/rhel-guest-image-*.aarch64.qcow2",
         },
         "generate_repo": True,
@@ -104,24 +103,26 @@ DISTRO_CONFIG = {
 
 # Packages installed into the guest image before first boot
 GUEST_PACKAGES = [
-    "pciutils",       # lspci — device presence checks
-    "net-tools",      # ifconfig — MAC address manipulation
-    "iproute",        # ip, devlink
-    "ethtool",        # NIC driver/link info
-    "numactl",        # NUMA policy tests
-    "irqbalance",     # irqbalance service tests
-    "stress-ng",      # memory stress during migration
-    "fio",            # NVMe I/O tests
-    "iperf3",         # migration network stress
-    "wget",           # netperf package download
+    "pciutils",  # lspci — device presence checks
+    "net-tools",  # ifconfig — MAC address manipulation
+    "iproute",  # ip, devlink
+    "ethtool",  # NIC driver/link info
+    "numactl",  # NUMA policy tests
+    "irqbalance",  # irqbalance service tests
+    "stress-ng",  # memory stress during migration
+    "fio",  # NVMe I/O tests
+    "iperf3",  # migration network stress
+    "wget",  # netperf package download
     "openssh-server",
 ]
 
 
 def _generate_repo(image_url):
     import re
-    compose_root = re.sub(r'/compose/.*', '/compose', image_url)
-    return textwrap.dedent(f"""\
+
+    compose_root = re.sub(r"/compose/.*", "/compose", image_url)
+    return textwrap.dedent(
+        f"""\
         [rhel10-BaseOS]
         name=rhel10-BaseOS
         baseurl={compose_root}/BaseOS/$basearch/os
@@ -135,21 +136,25 @@ def _generate_repo(image_url):
         enabled=1
         gpgcheck=0
         sslverify=0
-    """)
+    """
+    )
 
 
 def _resolve_url(url):
-    if '*' not in url:
+    if "*" not in url:
         return url
-    import fnmatch, re
-    dir_url, pattern = url.rsplit('/', 1)
-    listing = subprocess.run(['curl', '-sk', dir_url + '/'],
-                             capture_output=True, text=True).stdout
+    import fnmatch
+    import re
+
+    dir_url, pattern = url.rsplit("/", 1)
+    listing = subprocess.run(
+        ["curl", "-sk", dir_url + "/"], capture_output=True, text=True
+    ).stdout
     names = re.findall(r'href="([^"/][^"]*\.qcow2)"', listing)
     matches = sorted(f for f in names if fnmatch.fnmatch(f, pattern))
     if not matches:
         raise RuntimeError(f"No file matching '{pattern}' at {dir_url}/")
-    return dir_url + '/' + matches[-1]
+    return dir_url + "/" + matches[-1]
 
 
 def run(cmd, check=True, **kwargs):
@@ -168,8 +173,11 @@ def _generate_grace_xml(name, image_file, mac_addr, memory_kib, vcpus):
       - 4 PiB pcihole64 on the root complex for the 128 GB GPU BAR.
     """
     from utils import host
+
     emulator = host.qemu_binary()
-    cell0 = f"      <cell id='0' cpus='0-{vcpus - 1}' memory='{memory_kib}' unit='KiB'/>"
+    cell0 = (
+        f"      <cell id='0' cpus='0-{vcpus - 1}' memory='{memory_kib}' unit='KiB'/>"
+    )
     hbm_cells = "\n".join(
         f"      <cell id='{i}' memory='0' unit='KiB'/>" for i in range(1, 9)
     )
@@ -314,8 +322,11 @@ def _generate_grace_vgpu_xml(name, image_file, mac_addr, memory_kib, vcpus):
       - 8 TiB pcihole64 on the root complex for the GPU BAR.
     """
     from utils import host
+
     emulator = host.qemu_binary()
-    cell0 = f"      <cell id='0' cpus='0-{vcpus - 1}' memory='{memory_kib}' unit='KiB'/>"
+    cell0 = (
+        f"      <cell id='0' cpus='0-{vcpus - 1}' memory='{memory_kib}' unit='KiB'/>"
+    )
     hbm_cells = "\n".join(
         f"      <cell id='{i}' memory='0' unit='KiB'/>" for i in range(1, 9)
     )
@@ -497,11 +508,11 @@ def _generate_grace_vgpu_xml(name, image_file, mac_addr, memory_kib, vcpus):
 
 def _check_binaries():
     required = {
-        "curl":           "curl",
-        "qemu-img":       "qemu-img",
+        "curl": "curl",
+        "qemu-img": "qemu-img",
         "virt-customize": "guestfs-tools",
-        "virt-install":   "virt-install",
-        "virsh":          "libvirt-client",
+        "virt-install": "virt-install",
+        "virsh": "libvirt-client",
     }
     missing = {b: pkg for b, pkg in required.items() if not shutil.which(b)}
     if missing:
@@ -525,24 +536,30 @@ def setup_domain(domain_name, arch=None, machine_type=None, dry_run=False):
     cfg = config.update_dict(cfg, "domain", domain_name)
     domain = cfg["domain"]
 
-    image_name   = domain["image_name"]
-    mac_addr     = domain["mac_addr"]
-    memory       = domain["memory"]
-    vcpus        = domain["vcpu"]
-    root_passwd  = domain["passwd"]
-    hostname     = domain["name"]
+    image_name = domain["image_name"]
+    mac_addr = domain["mac_addr"]
+    memory = domain["memory"]
+    vcpus = domain["vcpu"]
+    root_passwd = domain["passwd"]
+    hostname = domain["name"]
     disk_size_gb = int(domain.get("image_size", 10))
-    secure_boot  = domain.get("secure_boot", "no").lower() in ("yes", "true", "1")
+    secure_boot = domain.get("secure_boot", "no").lower() in ("yes", "true", "1")
 
     distro = domain.get("distro", domain_name)
     distro_cfg = DISTRO_CONFIG.get(distro)
     if not distro_cfg:
-        raise RuntimeError(f"Unknown distro '{distro}' — add it to DISTRO_CONFIG in setup_domain.py")
+        raise RuntimeError(
+            f"Unknown distro '{distro}' — add it to DISTRO_CONFIG in setup_domain.py"
+        )
     cloud_image_url = distro_cfg["image_url"].get(arch)
     if not cloud_image_url:
-        raise RuntimeError(f"No image URL for distro '{distro}' arch '{arch}' — add it to DISTRO_CONFIG")
+        raise RuntimeError(
+            f"No image URL for distro '{distro}' arch '{arch}' — add it to DISTRO_CONFIG"
+        )
     cloud_image_url = _resolve_url(cloud_image_url)
-    repo_content = _generate_repo(cloud_image_url) if distro_cfg.get("generate_repo") else None
+    repo_content = (
+        _generate_repo(cloud_image_url) if distro_cfg.get("generate_repo") else None
+    )
     base_image_basename = distro_cfg["base_image"].format(arch=arch)
 
     image_path = paths.OUTPUT_IMAGE_DIR
@@ -558,14 +575,22 @@ def setup_domain(domain_name, arch=None, machine_type=None, dry_run=False):
     print(f"  Arch    : {arch}")
     print(f"  Machine : {machine_type}")
     distro_firmware = distro_cfg.get("firmware")
-    bios = distro_firmware if distro_firmware else MACHINE_BIOS.get(machine_type, 'unknown')
-    print(f"  BIOS    : {bios}{' (secure boot)' if bios == 'ovmf' and secure_boot else ''}")
+    bios = (
+        distro_firmware
+        if distro_firmware
+        else MACHINE_BIOS.get(machine_type, "unknown")
+    )
+    print(
+        f"  BIOS    : {bios}{' (secure boot)' if bios == 'ovmf' and secure_boot else ''}"
+    )
     print(f"  Image   : {image_file}")
     print(f"  Memory  : {memory} MiB")
     print(f"  vCPUs   : {vcpus}")
     print(f"  MAC     : {mac_addr}")
     print(f"  Pkgs    : {'yes' if do_install else 'no (subscribe guest first)'}")
-    print(f"  Repo    : {'generated from compose' if repo_content else '(distro default)'}")
+    print(
+        f"  Repo    : {'generated from compose' if repo_content else '(distro default)'}"
+    )
     print(f"{'='*60}\n")
 
     if dry_run:
@@ -584,7 +609,9 @@ def setup_domain(domain_name, arch=None, machine_type=None, dry_run=False):
     if os.path.exists(image_file):
         print(f"  Image already exists, removing: {image_file}")
         os.remove(image_file)
-    run(f"qemu-img create -f qcow2 -F qcow2 -b {base_image_basename} {image_file} {disk_size_gb}G")
+    run(
+        f"qemu-img create -f qcow2 -F qcow2 -b {base_image_basename} {image_file} {disk_size_gb}G"
+    )
 
     # Allow the libvirt-qemu user (uid:107) to traverse the image directory
     # and read the image files.
@@ -602,7 +629,9 @@ def setup_domain(domain_name, arch=None, machine_type=None, dry_run=False):
     root_dev = distro_cfg.get("root_dev", {"dev": "sda", "id": 1})
 
     if "ubuntu" in domain_name or "debian" in domain_name:
-        guest_packages_list = ["iproute2" if item == "iproute" else item for item in GUEST_PACKAGES]
+        guest_packages_list = [
+            "iproute2" if item == "iproute" else item for item in GUEST_PACKAGES
+        ]
         deb_extra = "ssh-keygen -A "
         if "ubuntu" in domain_name:
             deb_extra += "&& rm /etc/ssh/sshd_config.d/*.conf"
@@ -613,18 +642,20 @@ def setup_domain(domain_name, arch=None, machine_type=None, dry_run=False):
         guest_packages_list = GUEST_PACKAGES
         deb_extra = ""
 
-    firstboot_script = textwrap.dedent(f"""\
+    firstboot_script = textwrap.dedent(
+        f"""\
         #!/bin/bash
         {deb_extra}
         systemctl enable sshd irqbalance NetworkManager
         growpart /dev/{root_dev['dev']} {root_dev['id']} || true
         xfs_growfs / || resize2fs /dev/{root_dev['dev']}{root_dev['id']} || true
-    """)
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False) as f:
+    """
+    )
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as f:
         f.write(firstboot_script)
         firstboot_path = f.name
     if repo_content:
-        repo_tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.repo', delete=False)
+        repo_tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".repo", delete=False)
         repo_tmp.write(repo_content)
         repo_tmp.close()
         upload_flag = f"  --upload {repo_tmp.name}:/etc/yum.repos.d/rhel-devel.repo "
@@ -651,8 +682,7 @@ def setup_domain(domain_name, arch=None, machine_type=None, dry_run=False):
 
     # ── 4. Check if domain already defined ───────────────────────────────────
     result = subprocess.run(
-        f"virsh domstate {domain_name}",
-        shell=True, capture_output=True
+        f"virsh domstate {domain_name}", shell=True, capture_output=True
     )
     if result.returncode == 0:
         print(f"\nStep 4: Domain '{domain_name}' already defined — undefining first …")
@@ -712,20 +742,39 @@ def setup_domain(domain_name, arch=None, machine_type=None, dry_run=False):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--domain", required=True,
-                        help="Domain name matching a section in config/domains.ini")
-    parser.add_argument("--arch", default=platform.machine(),
-                        help="Guest CPU architecture (default: host arch, %(default)s)")
-    parser.add_argument("--machine-type", default=None,
-                        help="libvirt machine type (default: derived from --arch: "
-                             + ", ".join(f"{a}→{m}" for a, m in ARCH_MACHINE_TYPE.items()) + ")")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Print what would be done without executing")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--domain",
+        required=True,
+        help="Domain name matching a section in config/domains.ini",
+    )
+    parser.add_argument(
+        "--arch",
+        default=platform.machine(),
+        help="Guest CPU architecture (default: host arch, %(default)s)",
+    )
+    parser.add_argument(
+        "--machine-type",
+        default=None,
+        help="libvirt machine type (default: derived from --arch: "
+        + ", ".join(f"{a}→{m}" for a, m in ARCH_MACHINE_TYPE.items())
+        + ")",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print what would be done without executing",
+    )
     args = parser.parse_args()
 
-    setup_domain(args.domain, arch=args.arch, machine_type=args.machine_type, dry_run=args.dry_run)
+    setup_domain(
+        args.domain,
+        arch=args.arch,
+        machine_type=args.machine_type,
+        dry_run=args.dry_run,
+    )
 
 
 if __name__ == "__main__":

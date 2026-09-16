@@ -7,8 +7,8 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
 import json
-import os
 import logging
+import os
 import subprocess
 import threading
 
@@ -17,24 +17,19 @@ import re
 import shutil
 import time
 
-from utils import commands
-from utils import nvidia
-from utils import vfio
-from utils import config
-from utils import files
-from utils import process
-from utils import virsh
-from utils import paths
-
+from utils import commands, config, files, nvidia, paths, process, vfio, virsh
 
 _QEMU_CANDIDATES = ("qemu-kvm", "qemu-system-x86_64", "qemu-system-aarch64")
 _qemu_bin_override = None
+
 
 def qemu_binary():
     if _qemu_bin_override:
         return _qemu_bin_override
     try:
-        override = config.config_parser(['vfiasco.ini'])['path'].get('qemu_bin', '').strip()
+        override = (
+            config.config_parser(["vfiasco.ini"])["path"].get("qemu_bin", "").strip()
+        )
         if override:
             return override
     except Exception:
@@ -68,8 +63,9 @@ class _LocalBackend:
         return out if rc == 0 else None
 
     def write_sysfs(self, path, val):
-        process.run("echo %s > %s" % (val, path.replace(":", r"\:")),
-                    ignore_status=True)
+        process.run(
+            "echo %s > %s" % (val, path.replace(":", r"\:")), ignore_status=True
+        )
 
 
 def compute_device_info(pf_addrs, backend=None):
@@ -82,15 +78,15 @@ def compute_device_info(pf_addrs, backend=None):
         backend = _LocalBackend()
     computed = {}
     pf0 = pf_addrs[0]
-    pf_last = pf_addrs[-1]   # VFs are created from the last PF
+    pf_last = pf_addrs[-1]  # VFs are created from the last PF
 
     # ── nic_port_number ──────────────────────────────────────────────────────
-    computed['nic_port_number'] = str(len(pf_addrs))
+    computed["nic_port_number"] = str(len(pf_addrs))
 
     # ── device_driver (PF kernel module) ─────────────────────────────────────
     target = backend.read_symlink("/sys/bus/pci/devices/%s/driver" % pf0)
     if target:
-        computed['device_driver'] = os.path.basename(target)
+        computed["device_driver"] = os.path.basename(target)
 
     # ── device_ifname (JSON dict PCI → netdev) ───────────────────────────────
     ifname_dict = {}
@@ -99,26 +95,26 @@ def compute_device_info(pf_addrs, backend=None):
         if ifaces:
             ifname_dict[addr] = ifaces[0]
     if ifname_dict:
-        computed['device_ifname'] = json.dumps(ifname_dict)
+        computed["device_ifname"] = json.dumps(ifname_dict)
 
     # ── network_status (operstate of first PF) ───────────────────────────────
     if ifname_dict:
         ifname = list(ifname_dict.values())[0]
         val = backend.read_file("/sys/class/net/%s/operstate" % ifname)
         if val:
-            computed['network_status'] = val
+            computed["network_status"] = val
 
     # ── max_vfs (sriov_totalvfs of the VF-creating PF) ───────────────────────
     val = backend.read_file("/sys/bus/pci/devices/%s/sriov_totalvfs" % pf_last)
     if val:
-        computed['max_vfs'] = val
+        computed["max_vfs"] = val
 
     # ── exclusive_iommu ───────────────────────────────────────────────────────
     # Default to 'yes' when IOMMU is disabled (iommu_group symlink absent).
-    computed['exclusive_iommu'] = 'yes'
+    computed["exclusive_iommu"] = "yes"
     devs = backend.list_dir("/sys/bus/pci/devices/%s/iommu_group/devices" % pf0)
     if devs:
-        computed['exclusive_iommu'] = 'yes' if len(devs) <= len(pf_addrs) else 'no'
+        computed["exclusive_iommu"] = "yes" if len(devs) <= len(pf_addrs) else "no"
 
     # ── device_pattern_pf / device_pattern_vf ────────────────────────────────
     # Use lspci -vmm (verbose machine-readable) to extract Vendor+Device name.
@@ -137,12 +133,12 @@ def compute_device_info(pf_addrs, backend=None):
 
     name = _lspci_device_name(pf0)
     if name:
-        computed['device_pattern_pf'] = name
+        computed["device_pattern_pf"] = name
 
     # ── vf_driver + device_pattern_vf ────────────────────────────────────────
     # Use an already-existing VF if present, otherwise create one temporarily.
     virtfn0 = "/sys/bus/pci/devices/%s/virtfn0" % pf_last
-    totalvfs_val = int(computed.get('max_vfs', '0') or '0')
+    totalvfs_val = int(computed.get("max_vfs", "0") or "0")
     created_vf = False
     if not backend.path_exists(virtfn0) and totalvfs_val > 0:
         backend.write_sysfs("/sys/bus/pci/devices/%s/sriov_numvfs" % pf_last, 1)
@@ -154,17 +150,17 @@ def compute_device_info(pf_addrs, backend=None):
             vf_pci = os.path.basename(vf_target)
             target = backend.read_symlink("/sys/bus/pci/devices/%s/driver" % vf_pci)
             if target:
-                computed['vf_driver'] = os.path.basename(target)
+                computed["vf_driver"] = os.path.basename(target)
             name = _lspci_device_name(vf_pci)
             if name:
-                computed['device_pattern_vf'] = name
+                computed["device_pattern_vf"] = name
     if created_vf:
         backend.write_sysfs("/sys/bus/pci/devices/%s/sriov_numvfs" % pf_last, 0)
 
     # Fallback when VF probe failed (e.g. sriov_numvfs write rejected by driver):
     # SR-IOV VF lspci descriptions virtually always contain "Virtual Function".
-    computed.setdefault('device_pattern_vf', 'Virtual Function')
-    computed.setdefault('vf_driver', '')
+    computed.setdefault("device_pattern_vf", "Virtual Function")
+    computed.setdefault("vf_driver", "")
 
     return computed
 
@@ -172,11 +168,11 @@ def compute_device_info(pf_addrs, backend=None):
 def _enrich_host_devices_cfg(cfg):
     """Add sysfs-computed fields to every device entry in cfg."""
     for device_name, device_info in cfg.items():
-        if 'device_addr' not in device_info:
+        if "device_addr" not in device_info:
             continue
-        if 'nic_port_number' in device_info:  # already enriched, skip
+        if "nic_port_number" in device_info:  # already enriched, skip
             continue
-        pf_addrs = [a.strip() for a in device_info['device_addr'].split(',')]
+        pf_addrs = [a.strip() for a in device_info["device_addr"].split(",")]
         try:
             computed = compute_device_info(pf_addrs)
             for k, v in computed.items():
@@ -185,16 +181,17 @@ def _enrich_host_devices_cfg(cfg):
             log.warning("Could not compute device info for '%s': %s" % (device_name, e))
 
 
-host_devices_cfg = config.config_parser(['host_devices.ini'])
+host_devices_cfg = config.config_parser(["host_devices.ini"])
 _enrich_host_devices_cfg(host_devices_cfg)
 
 # Wrap config.config_parser so that any multi-file parse that includes
 # host_devices.ini also receives the computed device fields.
 _original_config_parser = config.config_parser
 
+
 def _enriching_config_parser(config_list):
     result = _original_config_parser(config_list)
-    if 'host_devices.ini' in config_list:
+    if "host_devices.ini" in config_list:
         # Copy already-probed fields into the merged dict — no sysfs re-probe.
         for device_name, device_info in host_devices_cfg.items():
             if device_name in result:
@@ -202,28 +199,33 @@ def _enriching_config_parser(config_list):
                     result[device_name].setdefault(k, v)
     return result
 
+
 config.config_parser = _enriching_config_parser
 
 
 def get_support_device_info(device_name):
     device_info = host_devices_cfg.get(device_name)
     if device_info is None:
-        raise ValueError("Unknown device '%s' — known devices: %s"
-                         % (device_name, list(host_devices_cfg.keys())))
-    pf_addrs = [a.strip() for a in device_info['device_addr'].split(',')]
+        raise ValueError(
+            "Unknown device '%s' — known devices: %s"
+            % (device_name, list(host_devices_cfg.keys()))
+        )
+    pf_addrs = [a.strip() for a in device_info["device_addr"].split(",")]
     if not any(os.path.exists("/sys/bus/pci/devices/%s" % a) for a in pf_addrs):
-        raise ValueError("Device '%s' (addr: %s) not found in sysfs — not present on this host"
-                         % (device_name, device_info['device_addr']))
+        raise ValueError(
+            "Device '%s' (addr: %s) not found in sysfs — not present on this host"
+            % (device_name, device_info["device_addr"])
+        )
     return device_info
 
 
 def disable_vf(device_name, all_pfs=False):
     pf_addr = get_init_device_list(device_name)
-    if host_devices_cfg[device_name].get('vgpu_type', ''):
+    if host_devices_cfg[device_name].get("vgpu_type", ""):
         nvidia.disable_vfs(pf_addr[0])
         return
     if all_pfs:
-        for i in range(len(pf_addr)-1):
+        for i in range(len(pf_addr) - 1):
             vfio.disable_vf(pf_addr[i])
     else:
         if len(pf_addr) == 1:
@@ -242,9 +244,9 @@ def create_vf(device_name, numvfs=1):
 def get_init_device_list(device_name):
     device_info = get_support_device_info(device_name)
     if "nic_port_number" in device_info and int(device_info["nic_port_number"]) == 1:
-        device_list = [device_info['device_addr']]
+        device_list = [device_info["device_addr"]]
     else:
-        device_list = device_info['device_addr'].split(',')
+        device_list = device_info["device_addr"].split(",")
     return device_list
 
 
@@ -257,25 +259,29 @@ def get_device_list_with_pattern(feature, device_name, numvfs=0):
     device_pattern_pf = host_devices_cfg[device_name]["device_pattern_pf"]
     device_pattern_vf = host_devices_cfg[device_name]["device_pattern_vf"]
     device_list = get_init_device_list(device_name)
-    if feature == 'vf':
+    if feature == "vf":
         max_pf_number = host_devices_cfg[device_name]["nic_port_number"]
         if max_pf_number == "1":
             pf_addr = device_list[0]
         else:
             pf_addr = device_list[1]
-        expected_driver = host_devices_cfg[device_name].get('device_driver', '')
+        expected_driver = host_devices_cfg[device_name].get("device_driver", "")
         if expected_driver:
             driver_link = "/sys/bus/pci/devices/%s/driver" % pf_addr
-            actual_driver = (os.path.basename(os.readlink(driver_link))
-                             if os.path.exists(driver_link) else '')
+            actual_driver = (
+                os.path.basename(os.readlink(driver_link))
+                if os.path.exists(driver_link)
+                else ""
+            )
             if actual_driver != expected_driver:
                 raise RuntimeError(
                     "device '%s': PF %s must be bound to '%s' but is bound to '%s'; "
                     "rebind before running this test"
-                    % (device_name, pf_addr, expected_driver, actual_driver))
+                    % (device_name, pf_addr, expected_driver, actual_driver)
+                )
         device_list = device_list[:1]
         vf_list = vfio.create_vf(pf_addr, numvfs, check_mac_address_flag=False)
-        switchdev_mode = host_devices_cfg[device_name].get('switchdev_mode', '')
+        switchdev_mode = host_devices_cfg[device_name].get("switchdev_mode", "")
         if switchdev_mode == "yes" and vf_list:
             log.info("Configuring VF for migration on localhost")
             vfio.unbind_vf_driver(vf_list[0])
@@ -284,17 +290,18 @@ def get_device_list_with_pattern(feature, device_name, numvfs=0):
 
         for item in vf_list:
             device_list.append(item)
-    elif feature == 'vgpu':
+    elif feature == "vgpu":
         pf_addr = device_list[0]
         vf_list = nvidia.enable_vfs(pf_addr)
         if not vf_list:
             raise RuntimeError("Failed to enable NVIDIA VFs on %s" % pf_addr)
         vf_addr = vf_list[0]
-        vgpu_type = host_devices_cfg[device_name].get('vgpu_type', '')
+        vgpu_type = host_devices_cfg[device_name].get("vgpu_type", "")
         if vgpu_type:
             if not nvidia.set_vgpu_type(vf_addr, vgpu_type):
                 raise RuntimeError(
-                    "Failed to set vGPU type %s on %s" % (vgpu_type, vf_addr))
+                    "Failed to set vGPU type %s on %s" % (vgpu_type, vf_addr)
+                )
         device_list = [vf_addr]
     return [device_pattern_pf, device_pattern_vf], device_list
 
@@ -311,7 +318,7 @@ def get_device_list_with_pattern_twovfs_twopfs(feature, device_name, numvfs=0):
     device_pattern_pf = host_devices_cfg[device_name]["device_pattern_pf"]
     device_pattern_vf = host_devices_cfg[device_name]["device_pattern_vf"]
     device_list = get_init_device_list(device_name)
-    if feature == 'vf':
+    if feature == "vf":
         vf_list = []
         for pf_addr in device_list:
             vf_list.append(vfio.create_vf(pf_addr, numvfs))
@@ -330,61 +337,63 @@ def get_device_list_twovfs_twopfs(feature, device_name, numvfs=0):
 
 def get_test_device_list(feature, device_name, numpfs, numvfs):
     test_device_list = []
-    device_list_with_pattern = get_device_list_with_pattern(feature, device_name, numvfs)
+    device_list_with_pattern = get_device_list_with_pattern(
+        feature, device_name, numvfs
+    )
     device_pattern = device_list_with_pattern[0]
     device_list = device_list_with_pattern[1]
-    if feature == 'pf':
+    if feature == "pf":
         if int(numpfs) == 1 and not numvfs:
             test_device_list = device_list[:1]
         if int(numpfs) == 2 and not numvfs:
             test_device_list = device_list
         device_pattern = device_pattern[0]
         for i in range(len(test_device_list)):
-            test_device_list[i] = [test_device_list[i], 'pf', device_pattern]
-    if feature == 'vf':
+            test_device_list[i] = [test_device_list[i], "pf", device_pattern]
+    if feature == "vf":
         if int(numpfs) == 0 and numvfs:
             test_device_list = device_list[1:]
             device_pattern = device_pattern[1]
             for i in range(len(test_device_list)):
-                test_device_list[i] = [test_device_list[i], 'vf', device_pattern]
+                test_device_list[i] = [test_device_list[i], "vf", device_pattern]
         if int(numpfs) == 1 and numvfs:
             test_device_list = device_list
-            test_device_list[0] = [test_device_list[0], 'pf', device_pattern[0]]
+            test_device_list[0] = [test_device_list[0], "pf", device_pattern[0]]
             for i in range(1, len(test_device_list)):
-                test_device_list[i] = [test_device_list[i], 'vf', device_pattern[1]]
-    if feature == 'gpu':
+                test_device_list[i] = [test_device_list[i], "vf", device_pattern[1]]
+    if feature == "gpu":
         if int(numpfs) == 1 and not numvfs:
             test_device_list = device_list[:1]
         if int(numpfs) == 2 and not numvfs:
             test_device_list = device_list
         device_pattern = device_pattern[0]
         for i in range(len(test_device_list)):
-            test_device_list[i] = [test_device_list[i], 'gpu', device_pattern]
-    if feature == 'vgpu':
+            test_device_list[i] = [test_device_list[i], "gpu", device_pattern]
+    if feature == "vgpu":
         if int(numpfs) == 0 and numvfs:
             test_device_list = device_list[:numvfs]
             device_pattern = device_pattern[1]
             for i in range(len(test_device_list)):
-                test_device_list[i] = [test_device_list[i], 'vgpu', device_pattern]
+                test_device_list[i] = [test_device_list[i], "vgpu", device_pattern]
     return test_device_list
 
 
 def get_test_device_list_twovfs_twopfs(feature, device_name, numpfs, numvfs):
     test_device_list = []
     host_device_list = get_device_list_twovfs_twopfs(feature, device_name, numvfs)
-    if feature == 'vf':
+    if feature == "vf":
         if int(numpfs) == 0 and numvfs:
             test_device_list = host_device_list[2:]
             device_pattern = get_device_pattern(feature, device_name, numvfs)[1]
             for i in range(len(test_device_list)):
-                test_device_list[i] = [test_device_list[i], 'vf', device_pattern]
+                test_device_list[i] = [test_device_list[i], "vf", device_pattern]
     return test_device_list
 
 
 def kill_qemu_kvm_by_kill(domain_name):
     result = False
     pid_cmd = "ps -aux | grep domainname | grep -v \"grep\"| awk '{print $2}'"
-    key_word = "guest=" + domain_name + ','
+    key_word = "guest=" + domain_name + ","
     pid_cmd = pid_cmd.replace("domainname", key_word)
     log.info(pid_cmd)
     if commands.getstatusoutput(pid_cmd)[0] == 0:
@@ -410,9 +419,11 @@ def save_top_process(process_name, dst_file):
     log.info("The pid of the %s process is %s" % (process_name, pid))
     if not pid:
         log.warning("No QEMU process found, skipping top capture")
-        files.append_content(dst_file, "---top %s process: not found----" % process_name)
+        files.append_content(
+            dst_file, "---top %s process: not found----" % process_name
+        )
         return ""
-    cmd = "top -n 1 -b -p %s | grep -B 2 %s" %(pid, pid)
+    cmd = "top -n 1 -b -p %s | grep -B 2 %s" % (pid, pid)
     log.info("running the '%s' cmd on the local host" % cmd)
     process_status = commands.getoutput("top -n 1 -b -p %s | grep -B 2 %s" % (pid, pid))
     files.append_content(dst_file, "---top %s process----" % process_name)
@@ -425,11 +436,14 @@ def get_process_res_memory(dst_file, process_name=None):
         process_name = qemu_process_name()
     status = save_top_process(process_name, dst_file)
     if not status or len(status.splitlines()) < 2:
-        log.warning("Cannot get RES memory for %s (process not found or top output invalid)" % process_name)
+        log.warning(
+            "Cannot get RES memory for %s (process not found or top output invalid)"
+            % process_name
+        )
         return "0"
     process_status_key_list = status.splitlines()[0].split()
     process_status_value_list = status.splitlines()[1].split()
-    process_status_dict = dict(zip(process_status_key_list,process_status_value_list))
+    process_status_dict = dict(zip(process_status_key_list, process_status_value_list))
     log.info("the %s process status dict: %s " % (process_name, process_status_dict))
     process_res_memory = process_status_dict.get("RES", "0")
     return process_res_memory
@@ -461,7 +475,10 @@ def clean_process(process_name):
 
 
 def check_iperf3_host(remote_host):
-    cmd = "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@%s 'which iperf3'" % remote_host
+    cmd = (
+        "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@%s 'which iperf3'"
+        % remote_host
+    )
     r = subprocess.run(cmd, shell=True, capture_output=True)
     return r.returncode
 
@@ -481,11 +498,12 @@ def run_iperf3_client_bg(ip, duration=60, interval=1, remote_host=None):
         cmd = iperf_cmd
         log.info("Starting iperf3 client on host: %s" % cmd)
     _iperf3_bg_proc = subprocess.Popen(
-        cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+    )
 
     def _reader():
         for line in _iperf3_bg_proc.stdout:
-            decoded = line.decode(errors='replace').rstrip()
+            decoded = line.decode(errors="replace").rstrip()
             _iperf3_bg_output.append(decoded)
             log.debug("iperf3: %s" % decoded)
         _iperf3_bg_proc.wait()
@@ -512,9 +530,10 @@ def wait_iperf3(timeout=60):
 def parse_iperf3_intervals(output):
     intervals = []
     pattern = re.compile(
-        r'\[\s*\d+\]\s+([\d.]+)-([\d.]+)\s+sec\s+[\d.]+\s+\w+\s+([\d.]+)\s+(bits|Kbits|Mbits|Gbits)/sec')
+        r"\[\s*\d+\]\s+([\d.]+)-([\d.]+)\s+sec\s+[\d.]+\s+\w+\s+([\d.]+)\s+(bits|Kbits|Mbits|Gbits)/sec"
+    )
     for line in output:
-        if 'sender' in line or 'receiver' in line or '- - -' in line:
+        if "sender" in line or "receiver" in line or "- - -" in line:
             continue
         m = pattern.search(line)
         if m:
@@ -522,11 +541,11 @@ def parse_iperf3_intervals(output):
             end = float(m.group(2))
             value = float(m.group(3))
             unit = m.group(4)
-            if unit == 'Gbits':
+            if unit == "Gbits":
                 mbps = value * 1000
-            elif unit == 'Mbits':
+            elif unit == "Mbits":
                 mbps = value
-            elif unit == 'Kbits':
+            elif unit == "Kbits":
                 mbps = value / 1000
             else:
                 mbps = value / 1000000
@@ -534,8 +553,9 @@ def parse_iperf3_intervals(output):
     return intervals
 
 
-def log_iperf3_summary(intervals, log, max_blackout=10, min_bw_pct=25,
-                       max_consecutive_low=3):
+def log_iperf3_summary(
+    intervals, log, max_blackout=10, min_bw_pct=25, max_consecutive_low=3
+):
     if not intervals:
         log.info("iperf3 summary: no interval data to analyze")
         return True
@@ -570,31 +590,42 @@ def log_iperf3_summary(intervals, log, max_blackout=10, min_bw_pct=25,
                 recovery_sec = intervals[i][0] - intervals[last_zero + 1][0]
                 break
 
-    log.info("iperf3 summary: %d intervals, %.0f s" %
-             (len(intervals), intervals[-1][1]))
+    log.info(
+        "iperf3 summary: %d intervals, %.0f s" % (len(intervals), intervals[-1][1])
+    )
     log.info("iperf3 summary: steady-state %.0f Mbits/sec (median)" % median)
     if blackout:
         log.info("iperf3 summary: blackout %d s (zero bandwidth)" % blackout)
-    log.info("iperf3 summary: min %.0f Mbits/sec at %.0f-%.0f s" %
-             (min_interval[2], min_interval[0], min_interval[1]))
+    log.info(
+        "iperf3 summary: min %.0f Mbits/sec at %.0f-%.0f s"
+        % (min_interval[2], min_interval[0], min_interval[1])
+    )
     if max_consec:
-        log.info("iperf3 summary: %d consecutive seconds below %d%% of steady-state" %
-                 (max_consec, min_bw_pct))
+        log.info(
+            "iperf3 summary: %d consecutive seconds below %d%% of steady-state"
+            % (max_consec, min_bw_pct)
+        )
     if recovery_sec is not None:
         log.info("iperf3 summary: recovery after %.0f s" % recovery_sec)
 
     passed = True
     if blackout > max_blackout:
-        log.error("iperf3 summary: FAIL — blackout %d s exceeds %d s threshold" %
-                  (blackout, max_blackout))
+        log.error(
+            "iperf3 summary: FAIL — blackout %d s exceeds %d s threshold"
+            % (blackout, max_blackout)
+        )
         passed = False
     if max_consec > max_consecutive_low:
-        log.error("iperf3 summary: FAIL — %d consecutive seconds below %d%% (max %d)" %
-                  (max_consec, min_bw_pct, max_consecutive_low))
+        log.error(
+            "iperf3 summary: FAIL — %d consecutive seconds below %d%% (max %d)"
+            % (max_consec, min_bw_pct, max_consecutive_low)
+        )
         passed = False
     if passed:
-        log.info("iperf3 summary: PASS — blackout %d s <= %d s, max consecutive low %d s <= %d s" %
-                 (blackout, max_blackout, max_consec, max_consecutive_low))
+        log.info(
+            "iperf3 summary: PASS — blackout %d s <= %d s, max consecutive low %d s <= %d s"
+            % (blackout, max_blackout, max_consec, max_consecutive_low)
+        )
     return passed
 
 
@@ -622,8 +653,9 @@ def setup_service_status(service_name, ops):
 
 def libvirt_service_name():
     """Return virtqemud if modular, libvirtd if monolithic."""
-    service_name = subprocess.run(["systemctl", "is-active", "virtqemud.socket"],
-                       capture_output=True, text=True)
+    service_name = subprocess.run(
+        ["systemctl", "is-active", "virtqemud.socket"], capture_output=True, text=True
+    )
     if service_name.stdout.strip() == "active":
         return "virtqemud"
     return "libvirtd"
@@ -753,34 +785,35 @@ def get_ssh_public_key():
     :rtype: str
     """
 
-    ssh_conf_path = os.path.expanduser('~/.ssh')
+    ssh_conf_path = os.path.expanduser("~/.ssh")
 
-    dsa_public_key_path = os.path.join(ssh_conf_path, 'id_dsa.pub')
-    dsa_private_key_path = os.path.join(ssh_conf_path, 'id_dsa')
+    dsa_public_key_path = os.path.join(ssh_conf_path, "id_dsa.pub")
+    dsa_private_key_path = os.path.join(ssh_conf_path, "id_dsa")
 
-    rsa_public_key_path = os.path.join(ssh_conf_path, 'id_rsa.pub')
-    rsa_private_key_path = os.path.join(ssh_conf_path, 'id_rsa')
+    rsa_public_key_path = os.path.join(ssh_conf_path, "id_rsa.pub")
+    rsa_private_key_path = os.path.join(ssh_conf_path, "id_rsa")
 
-    has_dsa_keypair = (os.path.isfile(dsa_public_key_path) and
-                       os.path.isfile(dsa_private_key_path))
-    has_rsa_keypair = (os.path.isfile(rsa_public_key_path) and
-                       os.path.isfile(rsa_private_key_path))
+    has_dsa_keypair = os.path.isfile(dsa_public_key_path) and os.path.isfile(
+        dsa_private_key_path
+    )
+    has_rsa_keypair = os.path.isfile(rsa_public_key_path) and os.path.isfile(
+        rsa_private_key_path
+    )
 
     if has_rsa_keypair:
-        log.info('RSA keypair found, using it')
+        log.info("RSA keypair found, using it")
         public_key_path = rsa_public_key_path
 
     elif has_dsa_keypair:
-        log.info('DSA keypair found, using it')
+        log.info("DSA keypair found, using it")
         public_key_path = dsa_public_key_path
 
     else:
-        log.info('Neither RSA nor DSA keypair found, creating RSA ssh key pair')
-        commands.getstatus('ssh-keygen -t rsa -q -N "" -f %s' %
-                           rsa_private_key_path)
+        log.info("Neither RSA nor DSA keypair found, creating RSA ssh key pair")
+        commands.getstatus('ssh-keygen -t rsa -q -N "" -f %s' % rsa_private_key_path)
         public_key_path = rsa_public_key_path
 
-    public_key = open(public_key_path, 'r')
+    public_key = open(public_key_path, "r")
     public_key_str = public_key.read()
     public_key.close()
 
@@ -794,38 +827,50 @@ def is_installed(package_name):
         log.info("The package %s is installed on the local host" % package_name)
         log.info("The %s package version is %s" % (package_name, cmd_result[1].strip()))
     else:
-        log.error("local host : Failed to find the package %s on the host" % package_name)
+        log.error(
+            "local host : Failed to find the package %s on the host" % package_name
+        )
     return cmd_status
 
 
 def get_interface_ip_address(interface):
     interface_info = commands.getstatusoutput("ip addr show %s" % interface)[1]
-    ip_address = re.search(r'inet\s+(\d+\.\d+\.\d+\.\d+)', interface_info)
+    ip_address = re.search(r"inet\s+(\d+\.\d+\.\d+\.\d+)", interface_info)
     if ip_address:
-        log.info("The %s's ip address is : %s" %(interface, ip_address.group(1)))
+        log.info("The %s's ip address is : %s" % (interface, ip_address.group(1)))
         return ip_address.group(1)
     return None
 
 
 def get_remote_ssh_public_key(remote_ip_address, key_type="rsa"):
-    cmd = "ssh-keyscan -t %s %s" %(key_type, remote_ip_address)
-    log.info("running %s to gather %s host public key" %(cmd, remote_ip_address))
+    cmd = "ssh-keyscan -t %s %s" % (key_type, remote_ip_address)
+    log.info("running %s to gather %s host public key" % (cmd, remote_ip_address))
     cmd_result = commands.getstatusoutput(cmd)
 
     cmd_status = cmd_result[0]
     if cmd_status == 0:
-        log.info("local host : Get the remote host %s public ssh key successfully" % remote_ip_address)
+        log.info(
+            "local host : Get the remote host %s public ssh key successfully"
+            % remote_ip_address
+        )
     else:
-        log.error("local host : Failed to get the remote host %s public ssh key" % remote_ip_address)
+        log.error(
+            "local host : Failed to get the remote host %s public ssh key"
+            % remote_ip_address
+        )
     return cmd_result[1]
 
 
 def add_key_to_known_hosts(ip_address, key_type="rsa"):
     known_hosts_file_path = "~/.ssh/known_hosts"
     ssh_public_key = get_remote_ssh_public_key(ip_address, key_type).split("\n")[1]
-    cmd_status = commands.getstatus("echo '%s\n' >> %s" %(ssh_public_key,  known_hosts_file_path))
+    cmd_status = commands.getstatus(
+        "echo '%s\n' >> %s" % (ssh_public_key, known_hosts_file_path)
+    )
     if cmd_status == 0:
-        log.debug("local host : Add the %s host to known_hosts successfully" % ip_address)
+        log.debug(
+            "local host : Add the %s host to known_hosts successfully" % ip_address
+        )
     else:
         log.error("local host : Failed to add the %s host to known_hosts" % ip_address)
 
@@ -833,9 +878,13 @@ def add_key_to_known_hosts(ip_address, key_type="rsa"):
 def remove_key_from_known_hosts(ip_address):
     cmd_status = commands.getstatus("ssh-keygen -R %s" % ip_address)
     if cmd_status == 0:
-        log.debug("local host : Remove the %s host from known_hosts successfully" % ip_address)
+        log.debug(
+            "local host : Remove the %s host from known_hosts successfully" % ip_address
+        )
     else:
-        log.error("local host : Failed to remove the %s host from known_hosts" % ip_address)
+        log.error(
+            "local host : Failed to remove the %s host from known_hosts" % ip_address
+        )
 
 
 def get_hostname_ipaddress_map():
@@ -848,21 +897,27 @@ def map_hostname_ipaddress(hostname, ip_address):
     hosts_file = "/etc/hosts"
     hosts_content = get_hostname_ipaddress_map()
     log.info("Currently the content of %s is\n%s" % (hosts_file, hosts_content))
-    pattern = r'%s(\s+)%s' % (ip_address, hostname)
+    pattern = r"%s(\s+)%s" % (ip_address, hostname)
     if not re.search(pattern, hosts_content):
         cmd = "echo '%s %s' >> %s" % (ip_address, hostname, hosts_file)
         log.info(cmd)
         cmd_status = commands.getstatus(cmd)
         if cmd_status != 0:
-            log.error("local host : The the hostname %s and the IP address %s are not mapped in %s" % (hostname, ip_address,
-                                                                                             hosts_file))
+            log.error(
+                "local host : The the hostname %s and the IP address %s are not mapped in %s"
+                % (hostname, ip_address, hosts_file)
+            )
             return False
         else:
-            log.info("local host : After mapping the hostname and IP address, the content of %s is \n%s" % (
-                  hosts_file, get_hostname_ipaddress_map()))
+            log.info(
+                "local host : After mapping the hostname and IP address, the content of %s is \n%s"
+                % (hosts_file, get_hostname_ipaddress_map())
+            )
     else:
-        log.info("The the hostname %s and the IP address %s has already mapped in %s" % (hostname, ip_address,
-                                                                                             hosts_file))
+        log.info(
+            "The the hostname %s and the IP address %s has already mapped in %s"
+            % (hostname, ip_address, hosts_file)
+        )
     return True
 
 
@@ -873,22 +928,38 @@ def set_sebool(local_bool_var="virt_use_nfs", local_bool_value="on"):
     # Get original SELinux boolean value, nothing to do if it equals to specified value
     local_boolean_orig = get_sebool()
     if local_bool_value == local_boolean_orig:
-        log.info("There is nothing to do because the %s has already been %s on host"
-                     % (local_bool_var, local_bool_value))
+        log.info(
+            "There is nothing to do because the %s has already been %s on host"
+            % (local_bool_var, local_bool_value)
+        )
         return True
 
-    log.info("Start to setup selinux boolean value: %s %s" % (local_bool_var, local_bool_value))
-    setup_result = commands.getstatus("setsebool %s %s" % (local_bool_var, local_bool_value))
+    log.info(
+        "Start to setup selinux boolean value: %s %s"
+        % (local_bool_var, local_bool_value)
+    )
+    setup_result = commands.getstatus(
+        "setsebool %s %s" % (local_bool_var, local_bool_value)
+    )
     if setup_result != 0:
-        log.error("Failed to setup the selinux boolean value of %s successfully" % local_bool_var)
+        log.error(
+            "Failed to setup the selinux boolean value of %s successfully"
+            % local_bool_var
+        )
         return False
 
     boolean_curr = get_sebool(local_bool_var)
     if boolean_curr != local_bool_value:
-        log.error("local host : The current selinux boolean value of %s is not right" % local_bool_var)
+        log.error(
+            "local host : The current selinux boolean value of %s is not right"
+            % local_bool_var
+        )
         return False
     else:
-        log.info("local host : Setup selinux boolean value successfully : %s %s " % (local_bool_var, local_bool_value))
+        log.info(
+            "local host : Setup selinux boolean value successfully : %s %s "
+            % (local_bool_var, local_bool_value)
+        )
         return True
 
 
@@ -900,7 +971,10 @@ def get_sebool(local_bool_var="virt_use_nfs"):
     log.debug("local host : Running the command: %s " % get_sebool_cmd)
 
     result = commands.getoutput(get_sebool_cmd).strip()
-    log.info("local host : The current selinux boolean value of %s is %s" %(local_bool_var, result))
+    log.info(
+        "local host : The current selinux boolean value of %s is %s"
+        % (local_bool_var, result)
+    )
     return result
 
 
@@ -914,11 +988,11 @@ def get_exported_nfs_fs_info():
 
 
 def is_mount(src_ip_address, src_dir, dst):
-    mount_str=src_ip_address + ":" + src_dir + " " + dst
+    mount_str = src_ip_address + ":" + src_dir + " " + dst
     mount_result = commands.getoutput("cat /proc/mounts")
     for result in mount_result.splitlines():
         if mount_str in result:
-            log.debug("The %s of %s is mounted currently" %(src_dir, src_ip_address))
+            log.debug("The %s of %s is mounted currently" % (src_dir, src_ip_address))
             return True
 
     log.debug("The %s of %s is not  mounted currently" % (src_dir, src_ip_address))
@@ -930,7 +1004,7 @@ def mount(src_ip_address, src_dir, dst, mount_type="nfs"):
     mount_cmd = "mount"
     src = src_ip_address + ":" + src_dir
     if is_mount(src_ip_address, src_dir, dst):
-        log.info("local host : No need to mount %s to %s again" %(src,dst))
+        log.info("local host : No need to mount %s to %s again" % (src, dst))
         return True
     if mount_type:
         mount_cmd = mount_cmd + " -t " + mount_type
@@ -939,18 +1013,18 @@ def mount(src_ip_address, src_dir, dst, mount_type="nfs"):
 
     mount_result = commands.getstatusoutput(mount_cmd)
     if mount_result[0] == 0:
-        log.info("local host : mount %s on the %s successfully" %(src, dst))
+        log.info("local host : mount %s on the %s successfully" % (src, dst))
         return True
     else:
         log.debug(mount_result[1])
-        log.error("local host : Failed to mount %s on the %s successfully" %(src, dst))
+        log.error("local host : Failed to mount %s on the %s successfully" % (src, dst))
         return False
 
 
 def umount(src_ip_address, src_dir, dst):
     src = src_ip_address + ":" + src_dir
     if not is_mount(src_ip_address, src_dir, dst):
-        log.debug("local host : No need to umount the %s from %s again" %(src, dst))
+        log.debug("local host : No need to umount the %s from %s again" % (src, dst))
     else:
         umount_cmd = "umount -f %s" % dst
         time.sleep(3)
@@ -967,7 +1041,7 @@ def umount(src_ip_address, src_dir, dst):
 
 def export_share_nfs_dir(export_dir, export_options, export_ip, backup_filename):
     commands.getstatus("cat /etc/exports > %s" % backup_filename)
-    exports_str = "%s %s(%s)" %(export_dir, export_ip, export_options)
+    exports_str = "%s %s(%s)" % (export_dir, export_ip, export_options)
     files.write_content("/etc/exports", exports_str)
     return commands.getoutput("cat /etc/exports")
 
@@ -976,8 +1050,9 @@ def unexport_share_nfs_dir(backup_filename):
     return commands.getstatus("mv -f %s /etc/exports" % backup_filename) == 0
 
 
-
-def authorise_ssh_logins(remote_ip_address, remote_user="root", remote_password="passw0rd"):
+def authorise_ssh_logins(
+    remote_ip_address, remote_user="root", remote_password="passw0rd"
+):
     """
     Setup up remote login in another server by using public key
 
@@ -992,7 +1067,11 @@ def authorise_ssh_logins(remote_ip_address, remote_user="root", remote_password=
         arch = commands.getoutput("arch")
         install_sshpass_rpm(arch)
     log.info(get_ssh_public_key())
-    ssh_key_setup_cmd = "sshpass -p %s ssh-copy-id -o PubkeyAuthentication=no %s@%s" %(remote_password, remote_user, remote_ip_address)
+    ssh_key_setup_cmd = "sshpass -p %s ssh-copy-id -o PubkeyAuthentication=no %s@%s" % (
+        remote_password,
+        remote_user,
+        remote_ip_address,
+    )
     log.info("running the '%s' on the local host" % ssh_key_setup_cmd)
 
     cmd_result = commands.getstatusoutput(ssh_key_setup_cmd)
@@ -1001,9 +1080,15 @@ def authorise_ssh_logins(remote_ip_address, remote_user="root", remote_password=
 
     log.debug(cmd_output)
     if cmd_status == 0:
-        log.debug("local host : use available keys to authorise logins on %s host successfully" % remote_ip_address)
+        log.debug(
+            "local host : use available keys to authorise logins on %s host successfully"
+            % remote_ip_address
+        )
     else:
-        log.error("local host : fail to use available keys to authorise logins on %s host" % remote_ip_address)
+        log.error(
+            "local host : fail to use available keys to authorise logins on %s host"
+            % remote_ip_address
+        )
 
 
 def backup_file(original_file, backup_file):
@@ -1013,16 +1098,20 @@ def backup_file(original_file, backup_file):
     backup_file_status = backup_file_result[0]
     backup_file_output = backup_file_result[1]
     if backup_file_status == 0:
-        log.debug("Backup the %s file as %s file successfully" % (original_file, backup_file))
+        log.debug(
+            "Backup the %s file as %s file successfully" % (original_file, backup_file)
+        )
         return True
     else:
-        log.error("Fail to backup the %s file as %s file" % (original_file, backup_file))
+        log.error(
+            "Fail to backup the %s file as %s file" % (original_file, backup_file)
+        )
         log.debug(backup_file_output)
         return False
 
 
 def restore_file(backup_file, original_file):
-    cmd = "mv -f %s %s" %(backup_file, original_file)
+    cmd = "mv -f %s %s" % (backup_file, original_file)
     log.info("Run the %s cmd on the local host" % cmd)
 
     restore_file_result = commands.getstatusoutput(cmd)
@@ -1032,7 +1121,9 @@ def restore_file(backup_file, original_file):
         log.debug("Restore the %s from the backup file successfully" % backup_file)
         return True
     else:
-        log.error("Fail to restore the %s from the backup file successfully" % backup_file)
+        log.error(
+            "Fail to restore the %s from the backup file successfully" % backup_file
+        )
         log.debug(restore_file_output)
         return False
 
@@ -1074,7 +1165,9 @@ def get_vf_link_trust_mode(pf_interface_name):
             vf_info = re.search(r"(vf\s\d)\s.*trust\s(\w*).*", info)
             if vf_info:
                 vf_trust_mode_info_dict[vf_info.group(1)] = vf_info.group(2)
-    log.info("The %s vf trust mode dict is %s" % (pf_interface_name, vf_trust_mode_info_dict))
+    log.info(
+        "The %s vf trust mode dict is %s" % (pf_interface_name, vf_trust_mode_info_dict)
+    )
     return vf_trust_mode_info_dict
 
 
@@ -1084,10 +1177,16 @@ def set_vf_link_trust_mode_status(pf_interface_name, numvfs, status="on"):
         log.info(cmd)
         cmd_status = commands.getstatusoutput(cmd)[0]
         if cmd_status == 0:
-            log.info("Set the trust mode of the %s vf %s successfully" % (pf_interface_name, number))
+            log.info(
+                "Set the trust mode of the %s vf %s successfully"
+                % (pf_interface_name, number)
+            )
             return True
         else:
-            log.error("Fail to set the trust mode of the %s vf %s" % (pf_interface_name, number))
+            log.error(
+                "Fail to set the trust mode of the %s vf %s"
+                % (pf_interface_name, number)
+            )
             return False
 
 
@@ -1172,8 +1271,10 @@ def show_file_content(file):
 def check_multi_devices_in_one_iommu(feature, device_name, numpfs, numvfs):
     test_device_list = get_test_device_list(feature, device_name, numpfs, numvfs)
     device_addr = test_device_list[0][0]
-    device_addr_iommu_list = commands.getoutput("ls $(dirname $(find /sys/kernel/iommu_groups -name %s))" % device_addr)
-    dev_addr_iommu_list = re.split(r'[\s]', device_addr_iommu_list)
+    device_addr_iommu_list = commands.getoutput(
+        "ls $(dirname $(find /sys/kernel/iommu_groups -name %s))" % device_addr
+    )
+    dev_addr_iommu_list = re.split(r"[\s]", device_addr_iommu_list)
     if len(dev_addr_iommu_list) == 1:
         return False
     else:
@@ -1198,7 +1299,9 @@ def define_vm_failover_vf_network(pf_interface_name):
 
 def define_vm_failover_vf_network_multi(pf_interface_name):
     original_vf_xml = paths.XML_DIR + "/failover_vf_net_multi.xml"
-    tmp_vf_xml = os.path.join(paths.TEST_DIR, "failover_%s_net_multi.xml" % pf_interface_name)
+    tmp_vf_xml = os.path.join(
+        paths.TEST_DIR, "failover_%s_net_multi.xml" % pf_interface_name
+    )
     net_name = "failover-vf1"
     if is_persistent_vm_network(net_name):
         virsh.net_undefine(net_name)
@@ -1250,7 +1353,7 @@ def is_active_vm_network(net_name):
 
 def show_active_vm_network():
     virsh.active_vm_net_list()
-    
+
 
 def has_active_connection(connection_name):
     cmd = "nmcli con show --active | grep -w %s" % connection_name
@@ -1284,6 +1387,7 @@ def get_host_iommu_aw_bits():
     Falls back to 48 when no Intel IOMMU is present in sysfs (AMD, etc.).
     """
     import glob
+
     cpu_phys_bits = 48
     try:
         with open("/proc/cpuinfo") as f:
@@ -1299,7 +1403,7 @@ def get_host_iommu_aw_bits():
         for cap_path in glob.glob("/sys/class/iommu/*/intel-iommu/cap"):
             with open(cap_path) as f:
                 cap = int(f.read().strip(), 16)
-            mgaw = (cap >> 16) & 0x3f
+            mgaw = (cap >> 16) & 0x3F
             min_aw = min(min_aw, mgaw + 1, cpu_phys_bits)
     except Exception:
         pass
@@ -1327,7 +1431,7 @@ def get_interface_by_pci(pci_address):
         Interface name (e.g., "eth0") if successful, None if not found
     """
     # Normalize the PCI address format by removing possible leading or extra content
-    pci_pattern = re.compile(r'[0-9a-fA-F]+:[0-9a-fA-F]+:[0-9a-fA-F]+\.[0-9a-fA-F]+')
+    pci_pattern = re.compile(r"[0-9a-fA-F]+:[0-9a-fA-F]+:[0-9a-fA-F]+\.[0-9a-fA-F]+")
     match = pci_pattern.search(pci_address)
     if not match:
         log.info("Invalid PCI address format: %s" % pci_address)
@@ -1338,7 +1442,9 @@ def get_interface_by_pci(pci_address):
     # Traverse all network interfaces
     net_class_path = "/sys/class/net/"
     if not os.path.exists(net_class_path):
-        log.info("System does not support /sys/class/net/ directory, cannot retrieve network interface information")
+        log.info(
+            "System does not support /sys/class/net/ directory, cannot retrieve network interface information"
+        )
         return None
 
     for interface in os.listdir(net_class_path):
@@ -1350,7 +1456,7 @@ def get_interface_by_pci(pci_address):
             # Get the real path of the device, which contains the PCI address
             real_path = os.readlink(device_path)
             # Extract PCI address from the path
-            pci_in_path = real_path.split('/')[-1].lower()
+            pci_in_path = real_path.split("/")[-1].lower()
 
             if pci_in_path == normalized_pci:
                 log.info("%s interface name is %s" % (pci_address, interface))
@@ -1389,21 +1495,31 @@ def setup_switchdev_mode(pci_address):
 def setup_legacy_mode(pci_address):
     setup_legacy_cmd = "devlink dev eswitch set pci/%s mode legacy" % pci_address
     log.info(setup_legacy_cmd)
-    setup_legacy_cmd_status, setup_legacy_cmd_output = commands.getstatusoutput(setup_legacy_cmd)
+    setup_legacy_cmd_status, setup_legacy_cmd_output = commands.getstatusoutput(
+        setup_legacy_cmd
+    )
     check_legacy_cmd = "devlink dev eswitch show pci/%s" % pci_address
     eswitch_info = commands.getoutput(check_legacy_cmd)
     if setup_legacy_cmd_status == 0 and "legacy" in eswitch_info:
         log.info("The %s is set to legacy mode successfully" % pci_address)
         return True
     else:
-        log.error("Fail to setup %s legacy mode as:\n%s" % (pci_address, setup_legacy_cmd_output))
+        log.error(
+            "Fail to setup %s legacy mode as:\n%s"
+            % (pci_address, setup_legacy_cmd_output)
+        )
         return False
 
 
 def get_devlink_port_index(pci_address):
     devlink_port_info = show_devlink_port()
-    devlink_port_index_list = re.findall(r'(pci/%s/\d+)' % pci_address, devlink_port_info)
-    log.info("the devlink port index list of %s is %s" % (pci_address, devlink_port_index_list))
+    devlink_port_index_list = re.findall(
+        r"(pci/%s/\d+)" % pci_address, devlink_port_info
+    )
+    log.info(
+        "the devlink port index list of %s is %s"
+        % (pci_address, devlink_port_index_list)
+    )
     return devlink_port_index_list
 
 
@@ -1422,7 +1538,9 @@ def enable_vf_migratable_feature(vf_index):
     status = result[0]
     if status != 0:
         output = result[1].strip()
-        log.error("Fail to enable %s's migratable feature due to %s" % (vf_index, output))
+        log.error(
+            "Fail to enable %s's migratable feature due to %s" % (vf_index, output)
+        )
         return False
     else:
         log.info("The %s's migratable feature is enabled" % vf_index)
@@ -1443,7 +1561,9 @@ def is_driver(pci_address_list, expected_driver):
     for pci_address in pci_address_list:
         cmd = "readlink -f /sys/bus/pci/devices/%s/driver" % pci_address
         driver_patch = commands.getoutput(cmd).strip()
-        driver_name = re.match(r'(/sys/bus/pci/drivers/(.*))', driver_patch).group(2).strip()
+        driver_name = (
+            re.match(r"(/sys/bus/pci/drivers/(.*))", driver_patch).group(2).strip()
+        )
         log.info("The %s's current driver : %s" % (pci_address, expected_driver))
         if driver_name != expected_driver:
             log.error("%s's driver is not %s" % (pci_address, expected_driver))
@@ -1453,8 +1573,10 @@ def is_driver(pci_address_list, expected_driver):
 
 
 def configure_ip_address(interface, ip_address):
-    cmd = "nmcli connection add type ethernet ifname %s con-name %s ipv4.method manual ipv4.addresses %s/24" \
-          % (interface, interface, ip_address)
+    cmd = (
+        "nmcli connection add type ethernet ifname %s con-name %s ipv4.method manual ipv4.addresses %s/24"
+        % (interface, interface, ip_address)
+    )
     log.info(cmd)
     cmd_result = commands.getstatusoutput(cmd)
     cmd_status = cmd_result[0]
@@ -1480,24 +1602,32 @@ def get_migration_info(domain_name):
 
 
 def get_migration_capabilities(domain_name):
-    migration_capabilities_info = virsh.qemu_monitor_command(domain_name, "info migrate_capabilities")
+    migration_capabilities_info = virsh.qemu_monitor_command(
+        domain_name, "info migrate_capabilities"
+    )
     migration_capabilities_list = []
     for capability in migration_capabilities_info.splitlines():
         capability = [n.strip() for n in capability.split(":")]
         migration_capabilities_list.append(capability)
     migration_capabilities_dict = dict(migration_capabilities_list)
-    log.debug("The migration capabilities info dictionary : %s" % migration_capabilities_dict)
+    log.debug(
+        "The migration capabilities info dictionary : %s" % migration_capabilities_dict
+    )
     return migration_capabilities_dict
 
 
 def get_migration_parameters(domain_name):
-    migration_parameters_info = virsh.qemu_monitor_command(domain_name, "info migrate_parameters")
+    migration_parameters_info = virsh.qemu_monitor_command(
+        domain_name, "info migrate_parameters"
+    )
     migration_parameters_list = []
     for parameter in migration_parameters_info.splitlines():
         parameter = [n.strip() for n in parameter.split(":")]
         migration_parameters_list.append(parameter)
     migration_capabilities_dict = dict(migration_parameters_list)
-    log.debug("The migration parameters info dictionary : %s" % migration_capabilities_dict)
+    log.debug(
+        "The migration parameters info dictionary : %s" % migration_capabilities_dict
+    )
     return migration_capabilities_dict
 
 
@@ -1519,20 +1649,22 @@ def get_current_kernel_package(arch="x86_64"):
     log.debug("current kernel version: %s" % kernel_package)
     return kernel_package
 
+
 def get_os_version():
     os_details = commands.getoutput("cat /etc/os-release").strip()
     for line in os_details.splitlines():
-        if line.startswith('VERSION_ID='):
-            ver_str = line.split('=')[1].strip().strip('"')
-            major_version = ver_str.split('.')[0]
+        if line.startswith("VERSION_ID="):
+            ver_str = line.split("=")[1].strip().strip('"')
+            major_version = ver_str.split(".")[0]
             return f"RHEL{major_version}"
+
 
 def install_brew_package():
     log.info("start to install the brewkoji package")
     update_ca_cmd = """
     curl -kL 'https://certs.corp.redhat.com/RH-IT-Root-CA.crt' -o /etc/pki/ca-trust/source/anchors/RH-IT-Root-CA.crt  &
-    curl -kL 'https://engineering.redhat.com/Eng-CA.crt' -o /etc/pki/ca-trust/source/anchors/Eng-CA.crt & 
-    update-ca-trust enable & 
+    curl -kL 'https://engineering.redhat.com/Eng-CA.crt' -o /etc/pki/ca-trust/source/anchors/Eng-CA.crt &
+    update-ca-trust enable &
     update-ca-trust extract
     """
 
@@ -1545,7 +1677,9 @@ def install_brew_package():
         update_repo_cmd = "dnf config-manager --add-repo http://download.devel.redhat.com/rel-eng/RCMTOOLS/rcm-tools-rhel-9-baseos.repo"
     else:
         update_repo_cmd = "dnf config-manager --add-repo http://download.devel.redhat.com/rel-eng/RCMTOOLS/rcm-tools-rhel-10-baseos.repo"
-    log.debug("Installing the brew package in %s + %s" % (os_version, current_kernel_version))
+    log.debug(
+        "Installing the brew package in %s + %s" % (os_version, current_kernel_version)
+    )
     commands.getoutput(update_repo_cmd)
     brewkoji_cmd = "dnf install brewkoji -y"
     install_brewkoji_cmd_result = commands.getstatusoutput(brewkoji_cmd)
@@ -1569,14 +1703,21 @@ def install_ovs_package(ovs_package="openvswitch3.6", arch="x86_64"):
         ovs_tag = "fast-datapath-rhel-10-candidate"
     else:
         ovs_tag = "fast-datapath-rhel-8-candidate"
-    get_ovs_build_name_cmd = "brew latest-build %s %s --quiet|cut -d ' ' -f 1" % (ovs_tag, ovs_package)
+    get_ovs_build_name_cmd = "brew latest-build %s %s --quiet|cut -d ' ' -f 1" % (
+        ovs_tag,
+        ovs_package,
+    )
     log.info("get_ovs_build_name_cmd")
     ovs_build_name = commands.getoutput(get_ovs_build_name_cmd).strip()
     log.info("The OpenvSwitch package is : %s" % ovs_build_name)
     ovs_package_dir = "/home/%s" % ovs_build_name
     commands.getoutput("mkdir -p %s" % ovs_package_dir)
     time.sleep(1)
-    download_build_cmd = "cd %s && brew download-build %s --arch=%s " % (ovs_package_dir, ovs_build_name, arch)
+    download_build_cmd = "cd %s && brew download-build %s --arch=%s " % (
+        ovs_package_dir,
+        ovs_build_name,
+        arch,
+    )
     commands.getoutput(download_build_cmd)
 
     download_build_cmd_result = commands.getstatusoutput(download_build_cmd)
@@ -1615,14 +1756,21 @@ def install_ovs_selinux_policy_package(arch="noarch"):
         ovs_tag = "fast-datapath-rhel-10-candidate"
     else:
         ovs_tag = "fast-datapath-rhel-8-candidate"
-    get_ovs_build_name_cmd = "brew latest-build %s openvswitch-selinux-extra-policy --quiet|cut -d ' ' -f 1" % ovs_tag
+    get_ovs_build_name_cmd = (
+        "brew latest-build %s openvswitch-selinux-extra-policy --quiet|cut -d ' ' -f 1"
+        % ovs_tag
+    )
     log.info("get_ovs_build_name_cmd")
     ovs_build_name = commands.getoutput(get_ovs_build_name_cmd).strip()
     log.info("The OpenvSwitch-selinux-extra-policy package is : %s" % ovs_build_name)
     ovs_package_dir = "/home/%s" % ovs_build_name
     commands.getoutput("mkdir -p %s" % ovs_package_dir)
     time.sleep(1)
-    download_build_cmd = "cd %s && brew download-build %s --arch=%s " % (ovs_package_dir, ovs_build_name, arch)
+    download_build_cmd = "cd %s && brew download-build %s --arch=%s " % (
+        ovs_package_dir,
+        ovs_build_name,
+        arch,
+    )
     download_build_cmd_result = commands.getstatusoutput(download_build_cmd)
     time.sleep(5)
     download_build_status = download_build_cmd_result[0]
@@ -1630,7 +1778,9 @@ def install_ovs_selinux_policy_package(arch="noarch"):
 
     if download_build_status != 0:
         log.debug("%s" % download_build_output)
-        log.error("Fail to download the OpenvSwitch-selinux-extra-policy package on local host")
+        log.error(
+            "Fail to download the OpenvSwitch-selinux-extra-policy package on local host"
+        )
         return False
     install_build_cmd = "cd %s && yum -y install *" % ovs_package_dir
 
@@ -1641,7 +1791,9 @@ def install_ovs_selinux_policy_package(arch="noarch"):
         log.error(install_build_cmd_output)
         log.error("Fail to install the OpenvSwitch-selinux-extra-policy package")
         return False
-    log.info("the OpenvSwitch-selinux-extra-policy package is installed on the local host")
+    log.info(
+        "the OpenvSwitch-selinux-extra-policy package is installed on the local host"
+    )
     return True
 
 
@@ -1651,7 +1803,7 @@ def create_ovs(ovs_name, create_ovs_script, ovs_version="3.6"):
         if not install_brew_result:
             return False
     if is_installed("openvswitch-selinux-extra-policy") != 0:
-        install_ovs_selinux_policy_result= install_ovs_selinux_policy_package()
+        install_ovs_selinux_policy_result = install_ovs_selinux_policy_package()
         if not install_ovs_selinux_policy_result:
             return False
     ovs_package = "openvswitch" + ovs_version
@@ -1699,11 +1851,11 @@ def get_switchdev_pf_ifname_list(pci_address):
     return ifname_list
 
 
-LIBVIRT_QEMU_LOG_DIR = '/var/log/libvirt/qemu'
+LIBVIRT_QEMU_LOG_DIR = "/var/log/libvirt/qemu"
 
 
 def libvirt_log_offset(domain_name):
-    log_path = os.path.join(LIBVIRT_QEMU_LOG_DIR, '%s.log' % domain_name)
+    log_path = os.path.join(LIBVIRT_QEMU_LOG_DIR, "%s.log" % domain_name)
     try:
         return os.path.getsize(log_path)
     except OSError:
@@ -1712,21 +1864,21 @@ def libvirt_log_offset(domain_name):
 
 def save_libvirt_log(domain_name, since=0, dest_path=None):
     if dest_path is None:
-        dest_path = os.path.join(paths.TEST_DIR, 'libvirt.log')
-    log_path = os.path.join(LIBVIRT_QEMU_LOG_DIR, '%s.log' % domain_name)
+        dest_path = os.path.join(paths.TEST_DIR, "libvirt.log")
+    log_path = os.path.join(LIBVIRT_QEMU_LOG_DIR, "%s.log" % domain_name)
     try:
-        with open(log_path, 'r') as f:
+        with open(log_path, "r") as f:
             f.seek(since)
             content = f.read()
     except OSError:
-        content = ''
+        content = ""
     files.create(dest_path)
-    with open(dest_path, 'w') as f:
+    with open(dest_path, "w") as f:
         f.write(content)
 
 
 def dmesg_timestamp():
-    result = subprocess.run(['dmesg'], capture_output=True, text=True)
+    result = subprocess.run(["dmesg"], capture_output=True, text=True)
     lines = result.stdout.splitlines()
     for line in reversed(lines):
         ts = extract_timestamp(line)
@@ -1737,21 +1889,24 @@ def dmesg_timestamp():
 
 def save_dmesg(since=None, dmesg_path=None):
     if dmesg_path is None:
-        dmesg_path = os.path.join(paths.TEST_DIR, 'host_dmesg')
-    result = subprocess.run(['dmesg'], capture_output=True, text=True)
+        dmesg_path = os.path.join(paths.TEST_DIR, "host_dmesg")
+    result = subprocess.run(["dmesg"], capture_output=True, text=True)
     if since is not None:
-        lines = [l for l in result.stdout.splitlines()
-                 if (extract_timestamp(l) or 0.0) > since]
-        output = '\n'.join(lines) + '\n' if lines else ''
+        lines = [
+            l
+            for l in result.stdout.splitlines()
+            if (extract_timestamp(l) or 0.0) > since
+        ]
+        output = "\n".join(lines) + "\n" if lines else ""
     else:
         output = result.stdout
     files.create(dmesg_path)
-    with open(dmesg_path, 'w') as f:
+    with open(dmesg_path, "w") as f:
         f.write(output)
 
 
 def extract_timestamp(line):
-    match = re.search(r'\[\s*([0-9.]+)\]', line)
+    match = re.search(r"\[\s*([0-9.]+)\]", line)
     if match:
         return float(match.group(1))
     return None

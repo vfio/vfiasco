@@ -6,14 +6,12 @@
 #
 # SPDX-License-Identifier: GPL-2.0-only
 
-import re
 import logging
+import re
 
 log = logging.getLogger(__name__)
 
-from utils import host
-from utils import virsh
-from utils import process
+from utils import host, process, virsh
 
 
 def check_numa_node_num_in_guest(session, numa_node_num=2):
@@ -27,12 +25,15 @@ def check_numa_node_num_in_guest(session, numa_node_num=2):
         log.info("============= Guest has the correct numa node number =============")
         return True
     else:
-        log.error("============= Guest fails to display correct numa node number =============")
+        log.error(
+            "============= Guest fails to display correct numa node number ============="
+        )
         return False
+
 
 def check_numa_policy(numa_output, policy, num_cells=2):
     if policy == "all":
-        check_policy = re.findall(r'default|interleave|prefer*|bind', numa_output)
+        check_policy = re.findall(r"default|interleave|prefer*|bind", numa_output)
         if len(check_policy) >= num_cells:
             return True
         else:
@@ -44,15 +45,21 @@ def check_numa_policy(numa_output, policy, num_cells=2):
         else:
             return False
 
+
 def check_numa_policy_in_hmp(domain_name, policy="all", num_cells=2):
-    hmp_numa_output = virsh.qemu_monitor_command(domain_name, 'info memdev')
+    hmp_numa_output = virsh.qemu_monitor_command(domain_name, "info memdev")
     check_hmp_policy = check_numa_policy(hmp_numa_output, policy, num_cells)
     if check_hmp_policy:
-        log.info("============= Hmp has the correct numa policy: %s =============" % policy)
+        log.info(
+            "============= Hmp has the correct numa policy: %s =============" % policy
+        )
         return True
     else:
-        log.error("============= Hmp fails to find the numa policy: %s =============" % policy)
+        log.error(
+            "============= Hmp fails to find the numa policy: %s =============" % policy
+        )
         return False
+
 
 def check_numa_policy_in_procs(domain_name, memory, policy="all", num_cells=2):
     """Check NUMA memory policy in the QEMU process's numa_maps.
@@ -66,16 +73,27 @@ def check_numa_policy_in_procs(domain_name, memory, policy="all", num_cells=2):
         log.error("Could not find QEMU process for domain %s" % domain_name)
         return False
     pid = pid_result.stdout.decode().strip().split()[0]
-    memory_smaps = process.run("pmap %s | grep %s" % (pid, memory)).stdout.decode().strip()
-    memory_mapping_list = re.findall(r'[1-9a-fA-F]+0*\s', memory_smaps)
+    memory_smaps = (
+        process.run("pmap %s | grep %s" % (pid, memory)).stdout.decode().strip()
+    )
+    memory_mapping_list = re.findall(r"[1-9a-fA-F]+0*\s", memory_smaps)
     numa_map_list = []
     for item in memory_mapping_list:
-        numa_map = process.run("grep %s /proc/%s/numa_maps" % (item, pid)).stdout.decode().strip()
+        numa_map = (
+            process.run("grep %s /proc/%s/numa_maps" % (item, pid))
+            .stdout.decode()
+            .strip()
+        )
         numa_map_list.append(numa_map)
     check_procs_policy = check_numa_policy(str(numa_map_list), policy, num_cells)
     if check_procs_policy:
-        log.info("============= Procs has the correct numa policy: %s =============" % policy)
+        log.info(
+            "============= Procs has the correct numa policy: %s =============" % policy
+        )
         return True
     else:
-        log.error("============= Procs fails to find the numa policy: %s =============" % policy)
+        log.error(
+            "============= Procs fails to find the numa policy: %s ============="
+            % policy
+        )
         return False

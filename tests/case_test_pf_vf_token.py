@@ -8,17 +8,15 @@
 
 import uuid
 
-from utils import logger
-from utils import host
-from utils import vfio
-from utils import virsh
-from utils import config
-from utils import paths
+from utils import config, host, logger, paths, vfio, virsh
 
 
 def run(device_name, numvfs=0):
     log = logger.create_logger(file_name="%s_pf_vf_token_test" % (device_name))
-    log.info("========== case: test the token between %s pf and vf ============" % device_name)
+    log.info(
+        "========== case: test the token between %s pf and vf ============"
+        % device_name
+    )
 
     module = "vfio_pci"
     log.info("==== load the %s module with enable_sriov param ====" % module)
@@ -59,16 +57,22 @@ def run(device_name, numvfs=0):
 
     log.info("====running the vf/pf token test====")
     try:
-        pf_token_output = host.running_executive_file(executive_token_test_program, pf_address, str(origin_token))
+        pf_token_output = host.running_executive_file(
+            executive_token_test_program, pf_address, str(origin_token)
+        )
         log.info(pf_token_output)
-        vf_token_output = host.running_executive_file(executive_token_test_program, vf_address, str(origin_token))
+        vf_token_output = host.running_executive_file(
+            executive_token_test_program, vf_address, str(origin_token)
+        )
         log.info(vf_token_output)
         if "Config space starts at" in vf_token_output:
             right_token_result = True
         else:
             right_token_result = False
 
-        wrong_token_output = host.running_executive_file(executive_token_test_program, vf_address, str(wrong_token))
+        wrong_token_output = host.running_executive_file(
+            executive_token_test_program, vf_address, str(wrong_token)
+        )
         log.info(wrong_token_output)
         if "Failed to get device" in wrong_token_output:
             wrong_token_result = True
@@ -97,4 +101,3 @@ def run(device_name, numvfs=0):
         log.info("FAIL - test the token between %s pf and vf" % device_name)
         log.remove_handler()
         return False
-

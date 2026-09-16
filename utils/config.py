@@ -6,21 +6,25 @@
 #
 # SPDX-License-Identifier: GPL-2.0-only
 
+import configparser as ConfigParser
 import os
 import socket
-import configparser as ConfigParser
+
 
 def _find_cfg_dir():
     if "VFIASCO_CONFIG" in os.environ:
         return os.environ["VFIASCO_CONFIG"]
-    src_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config")
+    src_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config"
+    )
     if os.path.isdir(src_dir):
         return src_dir
     return "/etc/vfiasco"
 
+
 _CFG_DIR = _find_cfg_dir()
 _HOSTNAME = socket.gethostname()
-_SHORT_HOSTNAME = _HOSTNAME.split('.')[0]
+_SHORT_HOSTNAME = _HOSTNAME.split(".")[0]
 _HOST_CFG_DIRS = []
 if _SHORT_HOSTNAME != _HOSTNAME:
     _HOST_CFG_DIRS.append(os.path.join(_CFG_DIR, "hosts", _SHORT_HOSTNAME))
@@ -63,7 +67,7 @@ def config_parser(config_list):
     cfg_dict = {}
     for section in cfg.sections():
         cfg_dict[section] = {}
-        for (item, value) in cfg.items(section):
+        for item, value in cfg.items(section):
             if value is not None:
                 cfg_dict[section][item] = value
 
@@ -87,4 +91,3 @@ def has_section(config_file, section):
     else:
         raise ValueError("The config file '%s' does not exists" % config_file)
     return cfg.has_section(section)
-

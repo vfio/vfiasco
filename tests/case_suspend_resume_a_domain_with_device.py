@@ -8,33 +8,45 @@
 
 import time
 
-from utils import qemu_vm
-from utils import logger
-from utils import config
-from utils import host
-from utils import virsh
-from utils import domain
-from utils import paths
+from utils import config, domain, host, logger, paths, qemu_vm, virsh
 
 
-def run(feature, device_name, domain_name, machine_type, bios, numpfs=1, numvfs=0, test_flag=""):
-    test_time = time.strftime('%Y_%m_%d_%H:%M:%S', time.localtime())
-    log = logger.create_logger(file_name="suspend_resume_1_%s_with_%spf_%svf_%s_test" % (domain_name, numpfs, numvfs, device_name))
+def run(
+    feature,
+    device_name,
+    domain_name,
+    machine_type,
+    bios,
+    numpfs=1,
+    numvfs=0,
+    test_flag="",
+):
+    test_time = time.strftime("%Y_%m_%d_%H:%M:%S", time.localtime())
+    log = logger.create_logger(
+        file_name="suspend_resume_1_%s_with_%spf_%svf_%s_test"
+        % (domain_name, numpfs, numvfs, device_name)
+    )
 
-    log.info("========== case: suspend and resume a %s with %s pf and %s vf %s ============" % (domain_name, numpfs, numvfs, device_name))
-    log.info('')
+    log.info(
+        "========== case: suspend and resume a %s with %s pf and %s vf %s ============"
+        % (domain_name, numpfs, numvfs, device_name)
+    )
+    log.info("")
 
     config_list = ["host_devices.ini", "domains.ini"]
     cfg = config.config_parser(config_list)
-    domain_cfg = config.update_dict(cfg, 'domain', domain_name)["domain"]
+    domain_cfg = config.update_dict(cfg, "domain", domain_name)["domain"]
     device_cfg = cfg[device_name]
     exclusive_iommu_flag = device_cfg["exclusive_iommu"]
     if exclusive_iommu_flag == "no":
         if feature == "vf" and numpfs != 0:
             log.info(
-                "When two PFs are in the same iommu group , the domain with a PF and VFs can not be started")
-            log.info("CANCEL - AMD Secure Memory Encryption + %s %s test in %s %s %s domain "
-                     % (device_name, feature, machine_type, bios, domain_name))
+                "When two PFs are in the same iommu group , the domain with a PF and VFs can not be started"
+            )
+            log.info(
+                "CANCEL - AMD Secure Memory Encryption + %s %s test in %s %s %s domain "
+                % (device_name, feature, machine_type, bios, domain_name)
+            )
             log.remove_handler()
             return "Cancel"
         elif feature == "pf":
@@ -45,11 +57,17 @@ def run(feature, device_name, domain_name, machine_type, bios, numpfs=1, numvfs=
     target_ip_addr = cfg.get(device_name, {}).get("test_ip_addr", "")
     has_network = bool(target_ip_addr)
 
-    vm = qemu_vm.VM(domain_cfg, feature, device_name, machine_type, bios, numpfs, numvfs)
+    vm = qemu_vm.VM(
+        domain_cfg, feature, device_name, machine_type, bios, numpfs, numvfs
+    )
     if "win" in domain_name:
-        test_device_list = host.get_windows_test_device_list(feature, device_name, numpfs, numvfs)
+        test_device_list = host.get_windows_test_device_list(
+            feature, device_name, numpfs, numvfs
+        )
     else:
-        test_device_list = host.get_test_device_list(feature, device_name, numpfs, numvfs)
+        test_device_list = host.get_test_device_list(
+            feature, device_name, numpfs, numvfs
+        )
 
     device_number = int(numpfs) + int(numvfs)
     if not host.has_interface("virbr0"):
@@ -65,10 +83,14 @@ def run(feature, device_name, domain_name, machine_type, bios, numpfs=1, numvfs=
             time.sleep(sleep_time)
             domain.resume_domain(domain_name)
             vm.save_ipconfig_info(session)
-            check_device_number_result = vm.check_device_number_in_windows_vm(session, test_device_list)
+            check_device_number_result = vm.check_device_number_in_windows_vm(
+                session, test_device_list
+            )
             if has_network:
                 target_ip_address = target_ip_addr
-                check_network_latency_result = vm.do_ping_tests(session, target_ip_address)
+                check_network_latency_result = vm.do_ping_tests(
+                    session, target_ip_address
+                )
                 check_result = check_device_number_result & check_network_latency_result
             else:
                 check_result = check_device_number_result
@@ -86,10 +108,14 @@ def run(feature, device_name, domain_name, machine_type, bios, numpfs=1, numvfs=
             check_hostdev_number_result = vm.check_device(session, test_device_list)
             exp_iface_num = device_number + 1 if has_network else 1
             check_interface_result = vm.check_vm_iface_num(session, exp_iface_num)
-            check_device_status_result = check_hostdev_number_result & check_interface_result
+            check_device_status_result = (
+                check_hostdev_number_result & check_interface_result
+            )
             if has_network:
                 target_ip_address = target_ip_addr
-                check_network_latency_result = vm.do_ping_tests(session, target_ip_address)
+                check_network_latency_result = vm.do_ping_tests(
+                    session, target_ip_address
+                )
                 check_result = check_device_status_result & check_network_latency_result
             else:
                 check_result = check_device_status_result
@@ -106,9 +132,17 @@ def run(feature, device_name, domain_name, machine_type, bios, numpfs=1, numvfs=
                 virsh.nodedev_reattach(pf_address)
 
     if test_flag:
-        test_summary = "suspend and resume a %s vm with %s ( %s pf and %s vf ) and %s test" % (domain_name, device_name, numpfs, numvfs, test_flag)
+        test_summary = (
+            "suspend and resume a %s vm with %s ( %s pf and %s vf ) and %s test"
+            % (domain_name, device_name, numpfs, numvfs, test_flag)
+        )
     else:
-        test_summary = "suspend and resume a %s vm with %s ( %s pf and %s vf )" % (domain_name, device_name, numpfs, numvfs)
+        test_summary = "suspend and resume a %s vm with %s ( %s pf and %s vf )" % (
+            domain_name,
+            device_name,
+            numpfs,
+            numvfs,
+        )
 
     if check_result:
         log.info("PASS - %s\n" % test_summary)

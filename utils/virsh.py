@@ -11,20 +11,20 @@ import os
 import re
 import time
 
-from utils import config
-from utils import process
+from utils import config, process
 from utils.pci_utils import Pci
 
 log = logging.getLogger(__name__)
 
 _MACHINE_TYPE_MAP = {
-    "q35":  re.compile(r"machine=(['\"])pc-q35-[^'\"]*\1"),
+    "q35": re.compile(r"machine=(['\"])pc-q35-[^'\"]*\1"),
     "virt": re.compile(r"machine=(['\"])virt-[^'\"]*\1"),
 }
 
 
 def _patch_custom_qemu(xml_path):
     from utils import host
+
     qemu_bin = host.qemu_binary()
     if not os.path.isfile(qemu_bin) or not os.access(qemu_bin, os.X_OK):
         return
@@ -32,8 +32,9 @@ def _patch_custom_qemu(xml_path):
     with open(xml_path) as f:
         content = f.read()
 
-    new_content = re.sub(r'<emulator>[^<]*</emulator>',
-                         '<emulator>%s</emulator>' % qemu_bin, content)
+    new_content = re.sub(
+        r"<emulator>[^<]*</emulator>", "<emulator>%s</emulator>" % qemu_bin, content
+    )
 
     for base_type, pattern in _MACHINE_TYPE_MAP.items():
         new_content = pattern.sub(r"machine=\1%s\1" % base_type, new_content)
@@ -99,18 +100,19 @@ def domain_exists(name):
 def domain_dead(domain):
     state = get_domain_state(domain).strip()
     valid_status_list = (
-        'running',
-        'idle',
-        'paused',
-        'in shutdown',
-        'shut off',
-        'crashed',
-        'pmsuspended',
-        'no state')
+        "running",
+        "idle",
+        "paused",
+        "in shutdown",
+        "shut off",
+        "crashed",
+        "pmsuspended",
+        "no state",
+    )
     if state not in valid_status_list:
         log.warning("State %s not known" % state)
 
-    inactive_status_list = ('shut off', 'crashed', 'no state')
+    inactive_status_list = ("shut off", "crashed", "no state")
     if state in inactive_status_list:
         return True
     return False
@@ -133,14 +135,14 @@ def start_domain(domain, options=""):
 
 def is_domain_running(domain_name):
     domain_state = get_domain_state(domain_name)
-    if domain_state == 'running':
+    if domain_state == "running":
         return True
     return False
 
 
 def is_domain_paused(domain_name):
     domain_state = get_domain_state(domain_name)
-    if domain_state == 'paused':
+    if domain_state == "paused":
         return True
     return False
 
@@ -178,11 +180,11 @@ def shutdown_domain(domain, options=""):
 
 def is_domain_shutoff(domain_name):
     domain_state = get_domain_state(domain_name)
-    if domain_state == 'in shutdown':
+    if domain_state == "in shutdown":
         time.sleep(1)
         if is_domain_shutoff(domain_name):
             return True
-    elif domain_state == 'shut off':
+    elif domain_state == "shut off":
         return True
     return False
 
@@ -203,12 +205,18 @@ def define(xml_path):
 
 
 def undefine(domain, options=""):
-    cmd_str = "undefine %s --nvram %s" % (domain, options) if options else "undefine %s --nvram" % domain
+    cmd_str = (
+        "undefine %s --nvram %s" % (domain, options)
+        if options
+        else "undefine %s --nvram" % domain
+    )
     log.debug("undefine VM %s" % domain)
     try:
         return command(cmd_str)
     except process.CmdError:
-        cmd_str = "undefine %s %s" % (domain, options) if options else "undefine %s" % domain
+        cmd_str = (
+            "undefine %s %s" % (domain, options) if options else "undefine %s" % domain
+        )
         return command(cmd_str)
 
 
@@ -227,7 +235,7 @@ def dumpxml(domain, options="", dst_file=""):
         cmd_str = "dumpxml %s %s" % (domain, options)
         result = command(cmd_str)
         if dst_file:
-            result_file = open(dst_file, 'w')
+            result_file = open(dst_file, "w")
             result_file.write(result)
             result_file.close()
             return dst_file
@@ -241,7 +249,7 @@ def nodedev_detach(device_address, driver=""):
     bus = pci_handle.get_pci_bus()
     slot = pci_handle.get_pci_slot()
     function = pci_handle.get_pci_function()
-    node_device_address = "pci"+"_"+domain+"_"+bus+"_"+slot+"_"+function
+    node_device_address = "pci" + "_" + domain + "_" + bus + "_" + slot + "_" + function
     cmd_str = "nodedev-detach %s" % node_device_address
     if driver:
         cmd_str = cmd_str + " --driver " + driver
@@ -265,16 +273,25 @@ def nodedev_detach_and_attach_device(device_addr, domain, device_xml):
     bus_num = pci_handle.get_pci_bus()
     slot_num = pci_handle.get_pci_slot()
     function_num = pci_handle.get_pci_function()
-    node_device_addr = "pci" + "_" + domain_num + "_" + bus_num + "_" + slot_num + "_" + function_num
+    node_device_addr = (
+        "pci" + "_" + domain_num + "_" + bus_num + "_" + slot_num + "_" + function_num
+    )
 
-    with open(device_xml, 'r') as vf_test_xml:
+    with open(device_xml, "r") as vf_test_xml:
         vf_test_xml_content = vf_test_xml.read()
-    import os; os.makedirs(paths.TEST_DIR, exist_ok=True)
+    import os
+
+    os.makedirs(paths.TEST_DIR, exist_ok=True)
     tmp_file = os.path.join(paths.TEST_DIR, "%s.xml" % device_addr)
-    xml_replace_dict = {"DOMAIN":domain_num, "BUS":bus_num, "SLOT":slot_num, "FUNCTION":function_num}
+    xml_replace_dict = {
+        "DOMAIN": domain_num,
+        "BUS": bus_num,
+        "SLOT": slot_num,
+        "FUNCTION": function_num,
+    }
     for i, j in xml_replace_dict.items():
-        vf_test_xml_content =vf_test_xml_content.replace(i,j)
-    with open(tmp_file, 'w') as domain_xml:
+        vf_test_xml_content = vf_test_xml_content.replace(i, j)
+    with open(tmp_file, "w") as domain_xml:
         domain_xml.write(vf_test_xml_content)
 
     nodedev_detach_cmd_str = "/usr/bin/virsh nodedev-detach %s" % (node_device_addr)
@@ -296,17 +313,24 @@ def dommemstat(domain_name):
 
 
 def qemu_monitor_command(domain_name, cmd, option="--hmp"):
-    cmd_str = "qemu-monitor-command %s %s %s" %(option, domain_name, cmd)
+    cmd_str = "qemu-monitor-command %s %s %s" % (option, domain_name, cmd)
     return command(cmd_str)
 
 
 def detach_device_alias(domain_name, alias_name, option="--alias"):
-    cmd_str = "detach-device-alias %s %s %s" %(domain_name, option, alias_name)
+    cmd_str = "detach-device-alias %s %s %s" % (domain_name, option, alias_name)
     return command(cmd_str)
 
 
-def detach_bridge_interface_by_mac_address(domain_name, mac_address, type="--type bridge",mac_address_option="--mac"):
-    cmd_str = " detach-interface %s %s %s %s" %(domain_name, type, mac_address_option, mac_address)
+def detach_bridge_interface_by_mac_address(
+    domain_name, mac_address, type="--type bridge", mac_address_option="--mac"
+):
+    cmd_str = " detach-interface %s %s %s %s" % (
+        domain_name,
+        type,
+        mac_address_option,
+        mac_address,
+    )
     return command(cmd_str)
 
 
@@ -380,7 +404,11 @@ def active_vm_net_list():
 
 
 def attach_hostdev_interface(domain, pci_address, mac_address, option=""):
-    cmd = "attach-interface %s  --type=hostdev --source=%s --mac=%s --managed" % (domain, pci_address, mac_address)
+    cmd = "attach-interface %s  --type=hostdev --source=%s --mac=%s --managed" % (
+        domain,
+        pci_address,
+        mac_address,
+    )
     if option:
         cmd += " %s" % option
     return command(cmd)

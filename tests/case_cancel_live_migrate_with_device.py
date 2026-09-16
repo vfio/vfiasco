@@ -6,27 +6,25 @@
 #
 # SPDX-License-Identifier: GPL-2.0-only
 
-import time
 import threading
+import time
 
-from utils import qemu_vm
-from utils import logger
-from utils import config
-from utils import host
-from utils import migration_env
-from utils import process
-from utils import virsh
+from utils import config, host, logger, migration_env, process, qemu_vm, virsh
 
 
 def run(feature, device_name, domain_name, machine_type, bios, numpfs=1, numvfs=0):
-    log = logger.create_logger(file_name="cancel_live_migrate_%s_with_%s_test" % (domain_name, device_name))
+    log = logger.create_logger(
+        file_name="cancel_live_migrate_%s_with_%s_test" % (domain_name, device_name)
+    )
 
     config_list = ["host_devices.ini", "domains.ini", "migration.ini"]
     cfg = config.config_parser(config_list)
-    cfg = config.update_dict(cfg, 'domain', domain_name)
+    cfg = config.update_dict(cfg, "domain", domain_name)
     domain_cfg = cfg["domain"]
 
-    vm = qemu_vm.VM(domain_cfg, feature, device_name, machine_type, bios, numpfs, numvfs)
+    vm = qemu_vm.VM(
+        domain_cfg, feature, device_name, machine_type, bios, numpfs, numvfs
+    )
     test_device_list = host.get_test_device_list(feature, device_name, numpfs, numvfs)
 
     env = migration_env.setup_migration_env(cfg, feature, device_name, numvfs, log)
@@ -54,7 +52,10 @@ def run(feature, device_name, domain_name, machine_type, bios, numpfs=1, numvfs=
         return False
 
     log.info("==== start migration and cancel ====")
-    dest_url = "qemu+ssh://%s/system --listen-address %s" % (dest_ip_address, dest_ip_address)
+    dest_url = "qemu+ssh://%s/system --listen-address %s" % (
+        dest_ip_address,
+        dest_ip_address,
+    )
     option = "--live"
     exc = [None]
     cancel_ok = False
@@ -74,7 +75,9 @@ def run(feature, device_name, domain_name, machine_type, bios, numpfs=1, numvfs=
         cancelled = False
         for _ in range(60):
             time.sleep(1)
-            r = process.run("/bin/virsh domjobinfo %s" % domain_name, ignore_status=True)
+            r = process.run(
+                "/bin/virsh domjobinfo %s" % domain_name, ignore_status=True
+            )
             if r.exit_status != 0:
                 continue
             info = {}
@@ -112,8 +115,14 @@ def run(feature, device_name, domain_name, machine_type, bios, numpfs=1, numvfs=
 
     log.remove_handler()
     if cancel_ok and check_device_after and ping_after:
-        log.info("PASS - cancel live migrate a %s vm with %s %s\n" % (domain_name, feature, device_name))
+        log.info(
+            "PASS - cancel live migrate a %s vm with %s %s\n"
+            % (domain_name, feature, device_name)
+        )
         return True
     else:
-        log.info("FAIL - cancel live migrate a %s vm with %s %s\n" % (domain_name, feature, device_name))
+        log.info(
+            "FAIL - cancel live migrate a %s vm with %s %s\n"
+            % (domain_name, feature, device_name)
+        )
         return False

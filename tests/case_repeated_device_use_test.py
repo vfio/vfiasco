@@ -8,35 +8,39 @@
 
 import time
 
-
-from utils import domain
-from utils import qemu_vm
-from utils import logger
-from utils import config
-from utils import host
-from utils import pci_utils
-from utils import virsh
+from utils import config, domain, host, logger, pci_utils, qemu_vm, virsh
 
 
 def run(feature, device_name, domain_name, machine_type, bios, numpfs=1, numvfs=0):
-    log = logger.create_logger(file_name="repeated_%s_%s_device_use_in_%s" % (feature, device_name,
-                                                                                 domain_name))
+    log = logger.create_logger(
+        file_name="repeated_%s_%s_device_use_in_%s"
+        % (feature, device_name, domain_name)
+    )
 
-    log.info('========== case: repeated %s %s device use in %s' % (feature, device_name, domain_name))
-    log.info('')
+    log.info(
+        "========== case: repeated %s %s device use in %s"
+        % (feature, device_name, domain_name)
+    )
+    log.info("")
 
     config_list = ["host_devices.ini", "domains.ini"]
     cfg = config.config_parser(config_list)
-    domain_cfg = config.update_dict(cfg, 'domain', domain_name)["domain"]
+    domain_cfg = config.update_dict(cfg, "domain", domain_name)["domain"]
     target_ip_addr = cfg.get(device_name, {}).get("test_ip_addr", "")
     has_network = bool(target_ip_addr)
 
-    vm = qemu_vm.VM(domain_cfg, feature, device_name, machine_type, bios, numpfs, numvfs)
+    vm = qemu_vm.VM(
+        domain_cfg, feature, device_name, machine_type, bios, numpfs, numvfs
+    )
 
     if "win" in domain_name:
-        test_device_list = host.get_windows_test_device_list(feature, device_name, numpfs, numvfs)
+        test_device_list = host.get_windows_test_device_list(
+            feature, device_name, numpfs, numvfs
+        )
     else:
-        test_device_list = host.get_test_device_list(feature, device_name, numpfs, numvfs)
+        test_device_list = host.get_test_device_list(
+            feature, device_name, numpfs, numvfs
+        )
 
     if feature != "vgpu":
         for device in test_device_list:
@@ -59,19 +63,26 @@ def run(feature, device_name, domain_name, machine_type, bios, numpfs=1, numvfs=
         vm.save_dmesg(session)
         # reboot test
         for i in range(3):
-            log.info("============== reboot domain inside %s vm %s times ============" % (domain_name, i + 1))
+            log.info(
+                "============== reboot domain inside %s vm %s times ============"
+                % (domain_name, i + 1)
+            )
             if "win" not in domain_name:
                 session.execute_command("reboot")
                 session = vm.wait_for_login()
                 time.sleep(5)
-                check_iface_number_result = vm.check_vm_iface_num(session, expected_interface_number)
+                check_iface_number_result = vm.check_vm_iface_num(
+                    session, expected_interface_number
+                )
                 check_device_result = vm.check_device(session, test_device_list)
                 check_result = check_iface_number_result & check_device_result
                 if has_network:
-                    time.sleep(dev_num*2)
+                    time.sleep(dev_num * 2)
                     target_ip_address = target_ip_addr
                     ping_count = "30"
-                    check_network_latency_result = vm.do_ping_tests(session, target_ip_address, ping_count)
+                    check_network_latency_result = vm.do_ping_tests(
+                        session, target_ip_address, ping_count
+                    )
                     check_result = check_result & check_network_latency_result
                 vm.save_dmesg(session)
             else:
@@ -79,64 +90,95 @@ def run(feature, device_name, domain_name, machine_type, bios, numpfs=1, numvfs=
                 time.sleep(30)
                 session = vm.wait_for_login(ip)
                 vm.save_ipconfig_info(session)
-                check_device_number_result = vm.check_device_number_in_windows_vm(session, test_device_list)
+                check_device_number_result = vm.check_device_number_in_windows_vm(
+                    session, test_device_list
+                )
                 if has_network:
                     target_ip_address = target_ip_addr
-                    check_network_latency_result = vm.do_ping_tests(session, target_ip_address)
-                    check_result = check_device_number_result & check_network_latency_result
+                    check_network_latency_result = vm.do_ping_tests(
+                        session, target_ip_address
+                    )
+                    check_result = (
+                        check_device_number_result & check_network_latency_result
+                    )
                 else:
                     check_result = check_device_number_result
                 time.sleep(30)
             if not check_result:
-                log.error("FAIL - repeated  %s %s device use test in %s\n" % (feature, device_name, domain_name))
+                log.error(
+                    "FAIL - repeated  %s %s device use test in %s\n"
+                    % (feature, device_name, domain_name)
+                )
                 log.remove_handler()
                 return False
 
         for i in range(3):
-            log.info("============== the %sth system_reset domain==============" % (i + 1))
+            log.info(
+                "============== the %sth system_reset domain==============" % (i + 1)
+            )
             domain.reset_domain(domain_name)
             session = vm.wait_for_login(ip)
             if "win" not in domain_name:
                 time.sleep(5)
-                check_iface_number_result = vm.check_vm_iface_num(session, expected_interface_number)
+                check_iface_number_result = vm.check_vm_iface_num(
+                    session, expected_interface_number
+                )
                 check_device_result = vm.check_device(session, test_device_list)
                 check_result = check_iface_number_result & check_device_result
                 if has_network:
-                    time.sleep(dev_num*2)
+                    time.sleep(dev_num * 2)
                     target_ip_address = target_ip_addr
                     ping_count = "30"
-                    check_network_latency_result = vm.do_ping_tests(session, target_ip_address, ping_count)
+                    check_network_latency_result = vm.do_ping_tests(
+                        session, target_ip_address, ping_count
+                    )
                     check_result = check_result & check_network_latency_result
                 vm.save_dmesg(session)
             else:
                 time.sleep(30)
-                check_device_number_result = vm.check_device_number_in_windows_vm(session, test_device_list)
+                check_device_number_result = vm.check_device_number_in_windows_vm(
+                    session, test_device_list
+                )
                 vm.save_ipconfig_info(session)
                 if has_network:
                     target_ip_address = target_ip_addr
-                    check_network_latency_result = vm.do_ping_tests(session, target_ip_address)
-                    check_result = check_device_number_result & check_network_latency_result
+                    check_network_latency_result = vm.do_ping_tests(
+                        session, target_ip_address
+                    )
+                    check_result = (
+                        check_device_number_result & check_network_latency_result
+                    )
                 else:
                     check_result = check_device_number_result
 
             if not check_result:
-                log.error("FAIL - repeated  %s %s device use test in %s\n" % (feature, device_name, domain_name))
+                log.error(
+                    "FAIL - repeated  %s %s device use test in %s\n"
+                    % (feature, device_name, domain_name)
+                )
                 log.remove_handler()
                 return False
 
         # shutdown test
         for i in range(3):
-            log.info("============= shutdown the vm inside %s domain %s times ===========" % (domain_name, i+1))
+            log.info(
+                "============= shutdown the vm inside %s domain %s times ==========="
+                % (domain_name, i + 1)
+            )
             if "win" not in domain_name:
                 time.sleep(5)
-                check_iface_number_result = vm.check_vm_iface_num(session, expected_interface_number)
+                check_iface_number_result = vm.check_vm_iface_num(
+                    session, expected_interface_number
+                )
                 check_device_result = vm.check_device(session, test_device_list)
                 check_result = check_iface_number_result & check_device_result
                 if has_network:
-                    time.sleep(dev_num*2)
+                    time.sleep(dev_num * 2)
                     target_ip_address = target_ip_addr
                     ping_count = "30"
-                    check_network_latency_result = vm.do_ping_tests(session, target_ip_address, ping_count)
+                    check_network_latency_result = vm.do_ping_tests(
+                        session, target_ip_address, ping_count
+                    )
                     check_result = check_result & check_network_latency_result
                 vm.save_dmesg(session)
                 session.execute_command("shutdown -h now")
@@ -146,11 +188,17 @@ def run(feature, device_name, domain_name, machine_type, bios, numpfs=1, numvfs=
                 vm.save_dmesg(session)
             elif "win" in domain_name:
                 vm.save_ipconfig_info(session)
-                check_device_number_result = vm.check_device_number_in_windows_vm(session, test_device_list)
+                check_device_number_result = vm.check_device_number_in_windows_vm(
+                    session, test_device_list
+                )
                 if has_network:
                     target_ip_address = target_ip_addr
-                    check_network_latency_result = vm.do_ping_tests(session, target_ip_address)
-                    check_result = check_device_number_result & check_network_latency_result
+                    check_network_latency_result = vm.do_ping_tests(
+                        session, target_ip_address
+                    )
+                    check_result = (
+                        check_device_number_result & check_network_latency_result
+                    )
                 else:
                     check_result = check_device_number_result
                 session.execute_command("shutdown -s -t 0")
@@ -159,41 +207,60 @@ def run(feature, device_name, domain_name, machine_type, bios, numpfs=1, numvfs=
                 session = vm.wait_for_login(ip)
                 vm.save_dmesg(session)
             if not check_result:
-                log.error("FAIL - repeated  %s %s device use test in %s\n" % (feature, device_name, domain_name))
+                log.error(
+                    "FAIL - repeated  %s %s device use test in %s\n"
+                    % (feature, device_name, domain_name)
+                )
                 log.remove_handler()
                 return False
 
         for i in range(3):
-            log.info("============ system power down %s domain %s times ===========" % ((domain_name, i + 1)))
+            log.info(
+                "============ system power down %s domain %s times ==========="
+                % ((domain_name, i + 1))
+            )
             if "win" not in domain_name:
                 domain.shutdown_domain(domain_name)
                 time.sleep(30)
                 vm.start_domain()
                 session = vm.wait_for_login()
                 time.sleep(5)
-                check_iface_number_result = vm.check_vm_iface_num(session, expected_interface_number)
+                check_iface_number_result = vm.check_vm_iface_num(
+                    session, expected_interface_number
+                )
                 check_device_result = vm.check_device(session, test_device_list)
                 check_result = check_iface_number_result & check_device_result
                 if has_network:
-                    time.sleep(dev_num*2)
+                    time.sleep(dev_num * 2)
                     target_ip_address = target_ip_addr
                     ping_count = "30"
-                    check_network_latency_result = vm.do_ping_tests(session, target_ip_address, ping_count)
+                    check_network_latency_result = vm.do_ping_tests(
+                        session, target_ip_address, ping_count
+                    )
                     check_result = check_result & check_network_latency_result
                 vm.save_dmesg(session)
             else:
                 time.sleep(60)
                 vm.save_ipconfig_info(session)
-                check_device_status_result = vm.check_device_number_in_windows_vm(session, test_device_list)
+                check_device_status_result = vm.check_device_number_in_windows_vm(
+                    session, test_device_list
+                )
                 if has_network:
                     target_ip_address = target_ip_addr
-                    check_network_latency_result = vm.do_ping_tests(session, target_ip_address)
-                    check_result = check_device_status_result & check_network_latency_result
+                    check_network_latency_result = vm.do_ping_tests(
+                        session, target_ip_address
+                    )
+                    check_result = (
+                        check_device_status_result & check_network_latency_result
+                    )
                 else:
                     check_result = check_device_status_result
 
             if not check_result:
-                log.error("FAIL - repeated %s %s device use test in %s\n" % (feature, device_name, domain_name))
+                log.error(
+                    "FAIL - repeated %s %s device use test in %s\n"
+                    % (feature, device_name, domain_name)
+                )
                 log.remove_handler()
                 return False
 
@@ -208,6 +275,9 @@ def run(feature, device_name, domain_name, machine_type, bios, numpfs=1, numvfs=
                 device_address = device[0]
                 virsh.nodedev_reattach(device_address)
 
-    log.info("PASS - repeated %s %s device use test in %s\n" % (feature, device_name, domain_name))
+    log.info(
+        "PASS - repeated %s %s device use test in %s\n"
+        % (feature, device_name, domain_name)
+    )
     log.remove_handler()
     return True

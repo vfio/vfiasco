@@ -9,34 +9,49 @@
 import os
 import time
 
-from utils import qemu_vm
-from utils import logger
-from utils import config
-from utils import host
-from utils import files
-from utils import virsh
+from utils import config, files, host, logger, paths, qemu_vm, virsh
 
-from . import case_boot_a_domain_with_device
-from . import case_reboot_a_domain_with_device
-from . import case_shutdown_a_domain_with_device
-from . import case_hotunplug_network_device
-from . import case_hotplug_device
-from utils import paths
+from . import (
+    case_boot_a_domain_with_device,
+    case_hotplug_device,
+    case_hotunplug_network_device,
+    case_reboot_a_domain_with_device,
+    case_shutdown_a_domain_with_device,
+)
 
 
-def run(feature, device_name, domain_name, machine_type, bios="ovmf", numpfs=2, numvfs=4, iommu_model="intel"):
-    log = logger.create_logger(file_name="%s_%s_and_%s_iommu_test_in_%s" % (device_name, feature,
-                                                                               iommu_model, domain_name))
+def run(
+    feature,
+    device_name,
+    domain_name,
+    machine_type,
+    bios="ovmf",
+    numpfs=2,
+    numvfs=4,
+    iommu_model="intel",
+):
+    log = logger.create_logger(
+        file_name="%s_%s_and_%s_iommu_test_in_%s"
+        % (device_name, feature, iommu_model, domain_name)
+    )
 
-    log.info("========== case: %s iommu device + %s %s Test ============" % (iommu_model, feature, device_name))
+    log.info(
+        "========== case: %s iommu device + %s %s Test ============"
+        % (iommu_model, feature, device_name)
+    )
     config_list = ["host_devices.ini", "domains.ini"]
     cfg = config.config_parser(config_list)
-    domain_cfg = config.update_dict(cfg, 'domain', domain_name)["domain"]
+    domain_cfg = config.update_dict(cfg, "domain", domain_name)["domain"]
 
     device_cfg = cfg[device_name]
     if device_cfg["exclusive_iommu"] == "no" and numpfs == 2:
-        log.info("When two PFs are in the same iommu group, the domain with iommu device can not be started")
-        log.info("CANCEL - %s iommu device + %s %s test in %s domain" % (iommu_model, device_name, feature, domain_name))
+        log.info(
+            "When two PFs are in the same iommu group, the domain with iommu device can not be started"
+        )
+        log.info(
+            "CANCEL - %s iommu device + %s %s test in %s domain"
+            % (iommu_model, device_name, feature, domain_name)
+        )
         log.remove_handler()
         return "Cancel"
 
@@ -49,7 +64,10 @@ def run(feature, device_name, domain_name, machine_type, bios="ovmf", numpfs=2, 
             test_tag = "intel_iommu"
             vm_kernel_option = "intel_iommu=on"
         else:
-            log.info("CANCEL - intel iommu device not available on this CPU architecture (%s)" % (cpu_model or "aarch64"))
+            log.info(
+                "CANCEL - intel iommu device not available on this CPU architecture (%s)"
+                % (cpu_model or "aarch64")
+            )
             log.remove_handler()
             return "Cancel"
     elif iommu_model == "virtio":
@@ -59,8 +77,13 @@ def run(feature, device_name, domain_name, machine_type, bios="ovmf", numpfs=2, 
         elif "Intel" in cpu_model:
             vm_kernel_option = "intel_iommu=on"
     else:
-        log.info("We only support the tests against virtio iommu or intel iommu currently")
-        log.info("CANCEL - %s iommu device + %s %s test in %s domain" % (iommu_model, device_name, feature, domain_name))
+        log.info(
+            "We only support the tests against virtio iommu or intel iommu currently"
+        )
+        log.info(
+            "CANCEL - %s iommu device + %s %s test in %s domain"
+            % (iommu_model, device_name, feature, domain_name)
+        )
         log.remove_handler()
         return "Cancel"
 
@@ -69,7 +92,9 @@ def run(feature, device_name, domain_name, machine_type, bios="ovmf", numpfs=2, 
     # booting with intel_iommu=on would hang.  The iommu device is injected
     # into the domain XML below; the guest will see it on its next boot.
     if vm_kernel_option == "intel_iommu=on" and "win" not in domain_name:
-        vm = qemu_vm.VM(domain_cfg, feature, device_name, machine_type, bios, numpfs, numvfs)
+        vm = qemu_vm.VM(
+            domain_cfg, feature, device_name, machine_type, bios, numpfs, numvfs
+        )
         try:
             vm.boot()
             ip = vm.get_ip()
@@ -78,7 +103,10 @@ def run(feature, device_name, domain_name, machine_type, bios="ovmf", numpfs=2, 
                 vm.setup_specified_kernel_option(session, vm_kernel_option)
         except Exception as _err:
             log.error("Test failed as %s" % _err)
-            log.error("FAIL - %s iommu device + %s %s test in %s domain" % (iommu_model, device_name, feature, domain_name))
+            log.error(
+                "FAIL - %s iommu device + %s %s test in %s domain"
+                % (iommu_model, device_name, feature, domain_name)
+            )
             vm.clean_env()
             log.remove_handler()
             return False
@@ -102,7 +130,9 @@ def run(feature, device_name, domain_name, machine_type, bios="ovmf", numpfs=2, 
     domain_backup_xml = paths.TEST_DIR + "/%s_iommu_backup.xml" % iommu_model
 
     if not virsh.domain_exists(domain_name):
-        log.error("FAIL - domain %s does not exist, cannot inject iommu device" % domain_name)
+        log.error(
+            "FAIL - domain %s does not exist, cannot inject iommu device" % domain_name
+        )
         log.remove_handler()
         return False
 
@@ -113,15 +143,17 @@ def run(feature, device_name, domain_name, machine_type, bios="ovmf", numpfs=2, 
     if iommu_model == "intel":
         aw_bits = host.get_host_iommu_aw_bits()
         aw_bits_attr = " aw_bits='%d'" % aw_bits if aw_bits < 40 else ""
-        iommu_xml = ("  <iommu model='intel'>\n"
-                     "    <driver intremap='on' caching_mode='on' iotlb='on'%s/>\n"
-                     "  </iommu>" % aw_bits_attr)
+        iommu_xml = (
+            "  <iommu model='intel'>\n"
+            "    <driver intremap='on' caching_mode='on' iotlb='on'%s/>\n"
+            "  </iommu>" % aw_bits_attr
+        )
     else:
         iommu_xml = "  <iommu model='virtio'/>"
 
     modified_xml = domain_xml_str.replace("</devices>", iommu_xml + "\n  </devices>")
     modified_xml_path = paths.TEST_DIR + "/%s_iommu_modified.xml" % iommu_model
-    with open(modified_xml_path, 'w') as f:
+    with open(modified_xml_path, "w") as f:
         f.write(modified_xml)
 
     virsh.undefine(domain_name)
@@ -130,23 +162,70 @@ def run(feature, device_name, domain_name, machine_type, bios="ovmf", numpfs=2, 
     host.reload_service()
 
     try:
-        basic_test_list = ["boot_result", "reboot_result", "shutdown_result", "hotplug_result", "hotunplug_result"]
+        basic_test_list = [
+            "boot_result",
+            "reboot_result",
+            "shutdown_result",
+            "hotplug_result",
+            "hotunplug_result",
+        ]
         test_result = dict.fromkeys(basic_test_list)
 
-        test_result['boot_result'] = case_boot_a_domain_with_device.run(feature, device_name, domain_name, machine_type,
-                                                                        bios, numpfs, numvfs, test_tag)
+        test_result["boot_result"] = case_boot_a_domain_with_device.run(
+            feature,
+            device_name,
+            domain_name,
+            machine_type,
+            bios,
+            numpfs,
+            numvfs,
+            test_tag,
+        )
 
-        test_result["shutdown_result"] = case_shutdown_a_domain_with_device.run(feature, device_name, domain_name, machine_type,
-                                                                                bios, numpfs, numvfs, test_tag)
+        test_result["shutdown_result"] = case_shutdown_a_domain_with_device.run(
+            feature,
+            device_name,
+            domain_name,
+            machine_type,
+            bios,
+            numpfs,
+            numvfs,
+            test_tag,
+        )
 
-        test_result["reboot_result"] = case_reboot_a_domain_with_device.run(feature, device_name, domain_name, machine_type, bios,
-                                                                             numpfs, numvfs, None, test_tag)
+        test_result["reboot_result"] = case_reboot_a_domain_with_device.run(
+            feature,
+            device_name,
+            domain_name,
+            machine_type,
+            bios,
+            numpfs,
+            numvfs,
+            None,
+            test_tag,
+        )
 
-        test_result["hotplug_result"] = case_hotplug_device.run(feature, device_name, domain_name, machine_type, bios, numpfs,
-                                                                        numvfs, test_tag)
+        test_result["hotplug_result"] = case_hotplug_device.run(
+            feature,
+            device_name,
+            domain_name,
+            machine_type,
+            bios,
+            numpfs,
+            numvfs,
+            test_tag,
+        )
 
-        test_result["hotunplug_result"] = case_hotunplug_network_device.run(feature, device_name, domain_name, machine_type, bios,
-                                                                             numpfs, numvfs, test_tag)
+        test_result["hotunplug_result"] = case_hotunplug_network_device.run(
+            feature,
+            device_name,
+            domain_name,
+            machine_type,
+            bios,
+            numpfs,
+            numvfs,
+            test_tag,
+        )
 
     except Exception as error:
         log.error("Test failed as %s" % error)
@@ -165,10 +244,16 @@ def run(feature, device_name, domain_name, machine_type, bios="ovmf", numpfs=2, 
 
     if False in test_result.values():
         log.info("The result is %s" % test_result)
-        log.error("FAIL - %s iommu device + %s %s test in %s domain" % (iommu_model, device_name, feature, domain_name))
+        log.error(
+            "FAIL - %s iommu device + %s %s test in %s domain"
+            % (iommu_model, device_name, feature, domain_name)
+        )
         log.remove_handler()
         return False
     else:
-        log.info("PASS - %s iommu device + %s %s test in %s domain" % (iommu_model, device_name, feature, domain_name))
+        log.info(
+            "PASS - %s iommu device + %s %s test in %s domain"
+            % (iommu_model, device_name, feature, domain_name)
+        )
         log.remove_handler()
         return True

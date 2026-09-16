@@ -8,10 +8,7 @@
 
 import time
 
-from utils import qemu_vm
-from utils import logger
-from utils import config
-from utils import migration_env
+from utils import config, logger, migration_env, qemu_vm
 
 
 def run(feature, device_name, domain_name, machine_type, bios, numpfs=1, numvfs=0):
@@ -20,10 +17,12 @@ def run(feature, device_name, domain_name, machine_type, bios, numpfs=1, numvfs=
 
     config_list = ["host_devices.ini", "domains.ini", "migration.ini"]
     cfg = config.config_parser(config_list)
-    cfg = config.update_dict(cfg, 'domain', domain_name)
+    cfg = config.update_dict(cfg, "domain", domain_name)
     domain_cfg = cfg["domain"]
 
-    vm = qemu_vm.VM(domain_cfg, feature, device_name, machine_type, bios, numpfs, numvfs)
+    vm = qemu_vm.VM(
+        domain_cfg, feature, device_name, machine_type, bios, numpfs, numvfs
+    )
 
     env = migration_env.setup_migration_env(cfg, feature, device_name, numvfs, log)
     if env is None:
@@ -50,18 +49,27 @@ def run(feature, device_name, domain_name, machine_type, bios, numpfs=1, numvfs=
         source_session.close()
 
         if not ping_src_host or not ping_tgt_host:
-            log.info("FAIL - live migrate a %s vm no device: pre-migration ping failed\n" % domain_name)
+            log.info(
+                "FAIL - live migrate a %s vm no device: pre-migration ping failed\n"
+                % domain_name
+            )
             return False
 
         domain_migration_result = vm.migrate_with_a_device(dest_ip_address)
 
         time.sleep(5)
-        dest_domstate = dest_session.execute_command(
-            "virsh domstate %s" % domain_name).decode().strip()
+        dest_domstate = (
+            dest_session.execute_command("virsh domstate %s" % domain_name)
+            .decode()
+            .strip()
+        )
         log.info("Domain state on destination after migration: %s" % dest_domstate)
         dest_running = dest_domstate == "running"
         if not dest_running:
-            log.error("Domain is not running on destination after migration (state: %s)" % dest_domstate)
+            log.error(
+                "Domain is not running on destination after migration (state: %s)"
+                % dest_domstate
+            )
 
         dest_session.execute_command("virsh destroy %s" % domain_name)
 

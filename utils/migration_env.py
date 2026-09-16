@@ -7,11 +7,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
 
-from utils import host
-from utils import nfs
-from utils import remote
-from utils import virsh
-
+from utils import host, nfs, remote, virsh
 
 ORIGINAL_HOSTS_FILE = "/etc/hosts"
 BACKUP_HOSTS_FILE = "/etc/hosts.backup"
@@ -49,11 +45,16 @@ def setup_migration_env(cfg, feature, device_name, numvfs, log):
 
         log.info("==== stop firewalld service on local host ====")
         original_firewalld_service_staus = host.get_service_status("firewalld.service")
-        log.info("The original status of firewalld.service on the local host: %s" % original_firewalld_service_staus)
+        log.info(
+            "The original status of firewalld.service on the local host: %s"
+            % original_firewalld_service_staus
+        )
         local_original_service_status_dict.update(original_firewalld_service_staus)
         host.stop_service("firewalld.service")
 
-        nfs_service_status, nfs_mode = nfs.setup_nfs_local(migration_cfg, source_ip_address, dest_ip_address)
+        nfs_service_status, nfs_mode = nfs.setup_nfs_local(
+            migration_cfg, source_ip_address, dest_ip_address
+        )
         log.info("==== setup nfs on local host (%s) ====" % nfs_mode)
         local_original_service_status_dict.update(nfs_service_status)
 
@@ -69,13 +70,20 @@ def setup_migration_env(cfg, feature, device_name, numvfs, log):
             virsh.active_vm_net_list()
 
     except Exception as source_setup_error:
-        log.error("local node:Do not setup migration test environment successfully %s" % source_setup_error)
-        log.info("CANCEL - Do not setup migration environment on local node successfully\n")
+        log.error(
+            "local node:Do not setup migration test environment successfully %s"
+            % source_setup_error
+        )
+        log.info(
+            "CANCEL - Do not setup migration environment on local node successfully\n"
+        )
         return None
 
     log.info("======== setup migration environment on the remote host ========")
     try:
-        dest_session = remote.get_remote_obj(dest_ip_address, dest_username, dest_password, wait_reboot=False)
+        dest_session = remote.get_remote_obj(
+            dest_ip_address, dest_username, dest_password, wait_reboot=False
+        )
 
         log.info("==== map ip and hostname on remote host ====")
         remote.backup_file(dest_session, ORIGINAL_HOSTS_FILE, BACKUP_HOSTS_FILE)
@@ -88,51 +96,83 @@ def setup_migration_env(cfg, feature, device_name, numvfs, log):
         remote.set_sebool(dest_session, "virt_use_nfs", "on")
 
         log.info("==== stop firewalld service on remote host ====")
-        remote_original_firewalld_service_staus = remote.get_service_status(dest_session, "firewalld.service")
-        log.info("The original status of firewalld.service on the remote host: %s"
-                 % remote_original_firewalld_service_staus)
-        remote_original_service_status_dict.update(remote_original_firewalld_service_staus)
+        remote_original_firewalld_service_staus = remote.get_service_status(
+            dest_session, "firewalld.service"
+        )
+        log.info(
+            "The original status of firewalld.service on the remote host: %s"
+            % remote_original_firewalld_service_staus
+        )
+        remote_original_service_status_dict.update(
+            remote_original_firewalld_service_staus
+        )
         remote.stop_service(dest_session, "firewalld.service")
 
-        remote_nfs_service_status, nfs_mode = nfs.setup_nfs_remote(dest_session, migration_cfg, source_ip_address, dest_ip_address)
+        remote_nfs_service_status, nfs_mode = nfs.setup_nfs_remote(
+            dest_session, migration_cfg, source_ip_address, dest_ip_address
+        )
         log.info("==== setup nfs on remote host (%s) ====" % nfs_mode)
         remote_original_service_status_dict.update(remote_nfs_service_status)
 
         log.info("==== setup ssh environment on remote host ====")
         original_remote_known_hosts_file = "~/.ssh/known_hosts"
         backup_remote_known_hosts_file = "~/.ssh/known_hosts.backup"
-        remote.backup_file(dest_session, original_remote_known_hosts_file, backup_remote_known_hosts_file)
+        remote.backup_file(
+            dest_session,
+            original_remote_known_hosts_file,
+            backup_remote_known_hosts_file,
+        )
 
         remote.get_ssh_public_key(dest_session)
         remote.remove_key_from_known_hosts(dest_session, source_ip_address)
         remote.add_key_to_known_hosts(dest_session, source_ip_address)
-        remote.authorise_ssh_logins(dest_session, source_ip_address, source_username, source_password)
+        remote.authorise_ssh_logins(
+            dest_session, source_ip_address, source_username, source_password
+        )
         log.info("==== active default vm network on remote host ====")
         remote.show_all_vm_network(dest_session)
 
         log.info("==== create vf on remote host ====")
-        if feature == 'vf' and numvfs > 0:
+        if feature == "vf" and numvfs > 0:
             dest_device_cfg = cfg.get(device_name)
             if dest_device_cfg:
-                dest_pf_addrs = [addr.strip() for addr in dest_device_cfg["device_addr"].split(",")]
+                dest_pf_addrs = [
+                    addr.strip() for addr in dest_device_cfg["device_addr"].split(",")
+                ]
                 if dest_device_cfg.get("nic_port_number") == "1":
                     target_pf = [dest_pf_addrs[0]]
                 else:
-                    target_pf = [dest_pf_addrs[-1]] if len(dest_pf_addrs) > 1 else [dest_pf_addrs[0]]
+                    target_pf = (
+                        [dest_pf_addrs[-1]]
+                        if len(dest_pf_addrs) > 1
+                        else [dest_pf_addrs[0]]
+                    )
 
-                log.info("Creating %d VF(s) on destination host PF: %s" % (numvfs, target_pf[0]))
-                vf_list = remote.create_vf(dest_session, target_pf, numvfs, check_mac_address_flag=False)
+                log.info(
+                    "Creating %d VF(s) on destination host PF: %s"
+                    % (numvfs, target_pf[0])
+                )
+                vf_list = remote.create_vf(
+                    dest_session, target_pf, numvfs, check_mac_address_flag=False
+                )
                 if dest_device_cfg.get("switchdev_mode") == "yes":
                     log.info("Configuring VF for migration on destination")
                     remote.unbind_driver(dest_session, vf_list[0])
                     remote.setup_mlx_switchdev_mode(dest_session, target_pf[0])
                     remote.enable_vf_migration(dest_session, target_pf[0], vf_index=0)
             else:
-                log.warning("Could not find device config for %s on destination" % device_name)
+                log.warning(
+                    "Could not find device config for %s on destination" % device_name
+                )
 
     except Exception as dest_setup_error:
-        log.error("remote_node : Do not setup migration test environment successfully for '%s'" % dest_setup_error)
-        log.info("CANCEL - Do not setup migration environment on remote node successfully\n")
+        log.error(
+            "remote_node : Do not setup migration test environment successfully for '%s'"
+            % dest_setup_error
+        )
+        log.info(
+            "CANCEL - Do not setup migration environment on remote node successfully\n"
+        )
         return None
 
     image_name = domain_cfg["image_name"]
@@ -184,7 +224,9 @@ def teardown_migration_env(env, vm, domain_name, log):
         dest_session.execute_command("virsh undefine %s" % domain_name)
 
     remote.restore_file(dest_session, BACKUP_HOSTS_FILE, ORIGINAL_HOSTS_FILE)
-    remote.restore_file(dest_session, BACKUP_KNOWN_HOSTS_FILE, ORIGINAL_KNOWN_HOSTS_FILE)
+    remote.restore_file(
+        dest_session, BACKUP_KNOWN_HOSTS_FILE, ORIGINAL_KNOWN_HOSTS_FILE
+    )
     remote.set_sebool(dest_session, "virt_use_nfs", env["original_remote_sebool_value"])
     for service in env["remote_original_service_status_dict"]:
         if "active" in env["remote_original_service_status_dict"][service]:
@@ -194,5 +236,7 @@ def teardown_migration_env(env, vm, domain_name, log):
         else:
             log.debug("Fail to restore the service status on the remote host")
 
-    nfs.teardown_nfs_remote(dest_session, migration_cfg, source_ip_address, dest_ip_address)
+    nfs.teardown_nfs_remote(
+        dest_session, migration_cfg, source_ip_address, dest_ip_address
+    )
     dest_session.close()

@@ -10,8 +10,7 @@ import logging
 import os
 import time
 
-from utils import commands
-from utils import process
+from utils import commands, process
 
 log = logging.getLogger(__name__)
 
@@ -19,15 +18,17 @@ log = logging.getLogger(__name__)
 def enable_vfs(pf_addr):
     sriov_manage = "/usr/lib/nvidia/sriov-manage"
     if not os.path.exists(sriov_manage):
-        log.error("%s not found — NVIDIA GRID driver may not be installed" % sriov_manage)
+        log.error(
+            "%s not found — NVIDIA GRID driver may not be installed" % sriov_manage
+        )
         return []
 
     log.info("Enabling NVIDIA SR-IOV VFs on %s" % pf_addr)
-    result = process.run("%s -e %s" % (sriov_manage, pf_addr),
-                         ignore_status=True)
+    result = process.run("%s -e %s" % (sriov_manage, pf_addr), ignore_status=True)
     if result.exit_status != 0:
-        log.error("Failed to enable VFs on %s: %s" %
-                  (pf_addr, result.stderr.decode().strip()))
+        log.error(
+            "Failed to enable VFs on %s: %s" % (pf_addr, result.stderr.decode().strip())
+        )
         return []
 
     time.sleep(2)
@@ -76,14 +77,16 @@ def set_vgpu_type(vf_addr, vgpu_type_id):
         with open(raw_path) as f:
             current = f.read().strip()
         if current == str(vgpu_type_id):
-            log.info("vGPU type %s already set on VF %s, skipping" %
-                     (vgpu_type_id, vf_addr))
+            log.info(
+                "vGPU type %s already set on VF %s, skipping" % (vgpu_type_id, vf_addr)
+            )
             return True
     log.info("Setting vGPU type %s on VF %s" % (vgpu_type_id, vf_addr))
-    result = process.run("echo %s > %s" % (vgpu_type_id, path),
-                         ignore_status=True)
+    result = process.run("echo %s > %s" % (vgpu_type_id, path), ignore_status=True)
     if result.exit_status != 0:
-        log.error("Failed to set vGPU type on %s: %s" %
-                  (vf_addr, result.stderr.decode().strip()))
+        log.error(
+            "Failed to set vGPU type on %s: %s"
+            % (vf_addr, result.stderr.decode().strip())
+        )
         return False
     return True

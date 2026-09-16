@@ -11,7 +11,9 @@ import subprocess
 
 def getstatusoutput(cmd):
     """Run a subprocess, returning its exit code and output."""
-    sp = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
+    sp = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True
+    )
     output, _ = sp.communicate()
     return sp.poll(), output.decode()
 
@@ -22,4 +24,3 @@ def getstatus(cmd):
 
 def getoutput(cmd):
     return getstatusoutput(cmd)[1].strip()
-

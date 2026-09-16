@@ -7,18 +7,19 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
 
-from utils import logger
-from utils import config
-from utils import host
-from utils import virsh
-from utils import paths
+from utils import config, host, logger, paths, virsh
 
 
 def run(feature, device_name, numpfs=1):
     if feature == "pf" and numpfs == 1:
         try:
-            log = logger.create_logger(file_name="%s_vfio_zero_page_mapping_after_2M_instances" % (device_name))
-            log.info("========== case: %s vfio_zero_page_mapping_after_2M_instances============" % device_name)
+            log = logger.create_logger(
+                file_name="%s_vfio_zero_page_mapping_after_2M_instances" % (device_name)
+            )
+            log.info(
+                "========== case: %s vfio_zero_page_mapping_after_2M_instances============"
+                % device_name
+            )
             config_list = ["host_devices.ini", "domains.ini"]
             cfg = config.config_parser(config_list)
             device_cfg = cfg[device_name]

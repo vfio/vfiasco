@@ -61,8 +61,9 @@ def get_vf_index(pf_pci, vf_pci):
 
 def get_vf_mac(pf_iface, vf_index):
     try:
-        out = subprocess.check_output(["ip", "link", "show", pf_iface],
-                                      text=True, stderr=subprocess.DEVNULL)
+        out = subprocess.check_output(
+            ["ip", "link", "show", pf_iface], text=True, stderr=subprocess.DEVNULL
+        )
     except subprocess.CalledProcessError:
         sys.exit("error: 'ip link show %s' failed" % pf_iface)
 
@@ -79,12 +80,13 @@ def get_vf_mac(pf_iface, vf_index):
 
 def send_rarp(iface, mac_str, count):
     mac = bytes.fromhex(mac_str.replace(":", ""))
-    buf = (b"\xff" * 6                                      # dst: broadcast
-           + mac                                             # src: VF MAC
-           + struct.pack("!HHH2BH", 0x8035, 1, 0x0800,      # RARP header
-                         6, 4, 3)
-           + mac                                             # sender hw addr
-           + b"\x00" * 32)                                   # zeroed remainder
+    buf = (
+        b"\xff" * 6  # dst: broadcast
+        + mac  # src: VF MAC
+        + struct.pack("!HHH2BH", 0x8035, 1, 0x0800, 6, 4, 3)  # RARP header
+        + mac  # sender hw addr
+        + b"\x00" * 32
+    )  # zeroed remainder
 
     s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(0x8035))
     try:
@@ -97,10 +99,15 @@ def send_rarp(iface, mac_str, count):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Send RARP broadcast after VF migration to update bridge FDB")
+        description="Send RARP broadcast after VF migration to update bridge FDB"
+    )
     parser.add_argument("vf_pci", help="VF PCI address (e.g. 0000:08:10.0)")
-    parser.add_argument("--count", type=int, default=3,
-                        help="number of RARP frames to send (default: 3)")
+    parser.add_argument(
+        "--count",
+        type=int,
+        default=3,
+        help="number of RARP frames to send (default: 3)",
+    )
     args = parser.parse_args()
 
     pf_pci = get_pf_pci(args.vf_pci)
@@ -108,8 +115,10 @@ def main():
     vf_index = get_vf_index(pf_pci, args.vf_pci)
     vf_mac = get_vf_mac(pf_iface, vf_index)
 
-    print("VF %s (index %d) on PF %s (%s), MAC %s" %
-          (args.vf_pci, vf_index, pf_iface, pf_pci, vf_mac))
+    print(
+        "VF %s (index %d) on PF %s (%s), MAC %s"
+        % (args.vf_pci, vf_index, pf_iface, pf_pci, vf_mac)
+    )
 
     send_rarp(pf_iface, vf_mac, args.count)
     print("Sent %d RARP frames on %s for %s" % (args.count, pf_iface, vf_mac))

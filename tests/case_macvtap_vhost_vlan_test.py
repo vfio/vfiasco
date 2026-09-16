@@ -8,24 +8,27 @@
 
 import time
 
-from utils import qemu_vm
-from utils import logger
-from utils import config
-from utils import host
-from utils import virsh
+from utils import config, host, logger, qemu_vm, virsh
 
 
-def run(feature, device_name, domain_name,machine_type, bios, vlan_tag, numpfs=1, numvfs=1):
-    test_time = time.strftime('%Y_%m_%d_%H:%M:%S', time.localtime())
-    log = logger.create_logger(file_name="boot_a_vm_with_vlan_%s_macvtap_%s_%s_test" % (vlan_tag,
-                                                                                      device_name, feature))
+def run(
+    feature, device_name, domain_name, machine_type, bios, vlan_tag, numpfs=1, numvfs=1
+):
+    test_time = time.strftime("%Y_%m_%d_%H:%M:%S", time.localtime())
+    log = logger.create_logger(
+        file_name="boot_a_vm_with_vlan_%s_macvtap_%s_%s_test"
+        % (vlan_tag, device_name, feature)
+    )
 
-    log.info("========== case: boot a vm with vlan %s macvtap %s %s test============" % (vlan_tag, device_name, feature))
-    log.info('')
+    log.info(
+        "========== case: boot a vm with vlan %s macvtap %s %s test============"
+        % (vlan_tag, device_name, feature)
+    )
+    log.info("")
 
     config_list = ["host_devices.ini", "domains.ini"]
     cfg = config.config_parser(config_list)
-    domain_cfg = config.update_dict(cfg, 'domain', domain_name)["domain"]
+    domain_cfg = config.update_dict(cfg, "domain", domain_name)["domain"]
 
     device_cfg = cfg[device_name]
 
@@ -38,7 +41,9 @@ def run(feature, device_name, domain_name,machine_type, bios, vlan_tag, numpfs=1
     # test_pf_interface_name = json.loads(device_cfg["device_ifname"])[test_pf_pci_address]
     test_pf_interface_name = host.get_interface_by_pci(pf_pci_address)
 
-    vm = qemu_vm.VM(domain_cfg, feature, device_name, machine_type, bios, numpfs, numvfs)
+    vm = qemu_vm.VM(
+        domain_cfg, feature, device_name, machine_type, bios, numpfs, numvfs
+    )
     test_device_list = host.get_test_device_list(feature, device_name, numpfs, numvfs)
     macvtap_driver = "vhost"
     macvtap_mode = "passthrough"
@@ -52,7 +57,9 @@ def run(feature, device_name, domain_name,machine_type, bios, vlan_tag, numpfs=1
         if len(interface_mac_address_dict) == 1:
             ifname = ifname_list[0]
             mac_address = interface_mac_address_dict[ifname]
-            vm.boot_with_macvtap_device(ifname, mac_address, macvtap_driver, macvtap_mode, vlan_tag)
+            vm.boot_with_macvtap_device(
+                ifname, mac_address, macvtap_driver, macvtap_mode, vlan_tag
+            )
             session = vm.wait_for_login()
             check_mac_addres_result = vm.check_virtio_device(session, mac_address)
             vf_vlan_info_dict = host.get_vf_vlan_info_dict(test_pf_interface_name)
@@ -80,10 +87,16 @@ def run(feature, device_name, domain_name,machine_type, bios, vlan_tag, numpfs=1
         vm.clean_env()
 
     if check_mac_addres_result and check_vlan_result:
-        log.info("PASS - boot a vm with %s macvtap + %s %s test\n" % (macvtap_driver, device_name, feature))
+        log.info(
+            "PASS - boot a vm with %s macvtap + %s %s test\n"
+            % (macvtap_driver, device_name, feature)
+        )
         log.remove_handler()
         return True
     else:
-        log.error("FAIL - boot a vm with %s macvtap + %s %s test\n" % (macvtap_driver, device_name, feature))
+        log.error(
+            "FAIL - boot a vm with %s macvtap + %s %s test\n"
+            % (macvtap_driver, device_name, feature)
+        )
         log.remove_handler()
         return False

@@ -8,29 +8,35 @@
 
 import time
 
-from utils import qemu_vm
-from utils import logger
-from utils import config
-from utils import host
-from utils import vfio
-from utils import paths
+from utils import config, host, logger, paths, qemu_vm, vfio
 
 
 def run(feature, device_name, domain_name, machine_type, bios, numpfs=0, numvfs=1):
-    log = logger.create_logger(file_name="change_%s_vf_number_while_vf_is_used" % (device_name))
+    log = logger.create_logger(
+        file_name="change_%s_vf_number_while_vf_is_used" % (device_name)
+    )
 
-    log.info("========== case: change the %s vf number while vf is in used ============" % device_name)
-    log.info('')
+    log.info(
+        "========== case: change the %s vf number while vf is in used ============"
+        % device_name
+    )
+    log.info("")
 
     config_list = ["host_devices.ini", "domains.ini"]
     cfg = config.config_parser(config_list)
-    domain_cfg = config.update_dict(cfg, 'domain', domain_name)["domain"]
+    domain_cfg = config.update_dict(cfg, "domain", domain_name)["domain"]
 
-    vm = qemu_vm.VM(domain_cfg, feature, device_name, machine_type, bios, numpfs, numvfs)
+    vm = qemu_vm.VM(
+        domain_cfg, feature, device_name, machine_type, bios, numpfs, numvfs
+    )
     if "win" in domain_name:
-        test_device_list = host.get_windows_test_device_list(feature, device_name, numpfs, numvfs)
+        test_device_list = host.get_windows_test_device_list(
+            feature, device_name, numpfs, numvfs
+        )
     else:
-        test_device_list = host.get_test_device_list(feature, device_name, numpfs, numvfs)
+        test_device_list = host.get_test_device_list(
+            feature, device_name, numpfs, numvfs
+        )
 
     device_list = host.get_init_device_list(device_name)
     if len(device_list) == 1:
@@ -50,7 +56,9 @@ def run(feature, device_name, domain_name, machine_type, bios, numpfs=0, numvfs=
                 check_device_number_result = vm.check_device(session, check_device_list)
                 vm.save_dmesg(session)
             elif "win" in domain_name:
-                check_device_number_result = vm.check_device_number_in_windows_vm(session,  check_device_list)
+                check_device_number_result = vm.check_device_number_in_windows_vm(
+                    session, check_device_list
+                )
         else:
             log.info("can not set the vf number to 0 when vf is used")
             check_device_number_result = False
@@ -64,10 +72,14 @@ def run(feature, device_name, domain_name, machine_type, bios, numpfs=0, numvfs=
         host.restart_service("libvirtd")
 
     if check_device_number_result:
-        log.info("PASS -  change the %s vf number while its vf's in used " % device_name)
+        log.info(
+            "PASS -  change the %s vf number while its vf's in used " % device_name
+        )
         log.remove_handler()
         return True
     else:
-        log.error("FAIL - change the %s vf number while its vf's in used " % device_name)
+        log.error(
+            "FAIL - change the %s vf number while its vf's in used " % device_name
+        )
         log.remove_handler()
         return False

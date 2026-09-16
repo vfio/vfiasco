@@ -8,16 +8,13 @@
 
 import random
 
-from utils import logger
-from utils import host
-from utils import vfio
-from utils import config
+from utils import config, host, logger, vfio
 
 
 def run(device_name):
     log = logger.create_logger(file_name="repeatedly_enable_disable_vf")
     log.info("========== case:Repeatedly enable and disable VF ============")
-    log.info('')
+    log.info("")
 
     cfg = config.config_parser(["host_devices.ini"])
     device_cfg = cfg[device_name]
@@ -32,7 +29,10 @@ def run(device_name):
         for pci_addr in device_list:
             for i in range(5):
                 numvfs = random.randint(1, numvfs_max)
-                log.info("----------- %d: create %d vfs on %s -----------\n" % (i + 1, numvfs, pci_addr))
+                log.info(
+                    "----------- %d: create %d vfs on %s -----------\n"
+                    % (i + 1, numvfs, pci_addr)
+                )
                 vfio.disable_vf(pci_addr)
                 vfio.create_vf(pci_addr, numvfs)
                 real_vf_nums = vfio.get_vf_nums(pci_addr)

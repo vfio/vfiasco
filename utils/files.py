@@ -17,11 +17,11 @@ def get_content(file_name):
 
 def create(file_name):
     dir_name = os.path.dirname(file_name)
- 
+
     if dir_name and not os.path.exists(dir_name):
         os.makedirs(dir_name)
-    
-    open(file_name, 'w+').close()
+
+    open(file_name, "w+").close()
 
 
 def create_path(path):
@@ -63,20 +63,20 @@ def insert_str(base_file, add_str, new_file, keyword):
 
 
 def replace(base_file, new_file, pattern, value):
-    fd = open(base_file, 'r')
+    fd = open(base_file, "r")
     content = fd.read()
     fd.close()
 
     content = content.replace(pattern, value)
 
-    fd = open(new_file, 'w')
+    fd = open(new_file, "w")
     fd.write(content)
     fd.close()
 
 
 def write_content(filename, content):
-    fd = open(filename, 'w+')
-    fd.write(content + '\n')
+    fd = open(filename, "w+")
+    fd.write(content + "\n")
     fd.close()
 
 
@@ -91,8 +91,8 @@ def merge_content(original_filename1, original_filename2, new_filename):
 
 
 def append_content(filename, content):
-    fd = open(filename, 'a+')
-    fd.write(content + '\n')
+    fd = open(filename, "a+")
+    fd.write(content + "\n")
     fd.close()
 
 
@@ -101,4 +101,3 @@ def remove_file(file):
         os.remove(file)
     else:
         pass
-

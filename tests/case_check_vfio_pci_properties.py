@@ -8,19 +8,19 @@
 
 import os
 
-from utils import host
-from utils import logger
-from utils import process
-from utils import files
-from utils import paths
+from utils import files, host, logger, paths, process
 
 _qemu_bin = host.qemu_binary()
 cmd = "%s -device vfio-pci,?" % _qemu_bin
+
+
 def run():
     path = os.path.join(paths.TEST_DIR, "qemu-kvm_device_vfio-pci_properties")
     log = logger.create_logger(file_name="check_vfio_pci_properties")
-    log.info("========== case: check qemu-kvm -device vfio-pci,? properties	 ============")
-    log.info('')
+    log.info(
+        "========== case: check qemu-kvm -device vfio-pci,? properties	 ============"
+    )
+    log.info("")
     try:
         vfio_pci_properties_content = process.run(cmd).stderr.strip().decode()
 
@@ -31,7 +31,7 @@ def run():
         return False
 
     files.create(path)
-    with open(path, 'w+') as f:
+    with open(path, "w+") as f:
         f.write(vfio_pci_properties_content)
 
     log.info("PASS | check qemu-kvm -device vfio-pci,? properties")

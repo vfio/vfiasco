@@ -8,15 +8,17 @@
 
 import os
 
+from utils import files, hugepage, paths
 from utils.pci_utils import Pci
-from utils import hugepage
-from utils import files
-from utils import paths
 
 temp_path = paths.XML_DIR
 device_addr_xml = os.path.join(paths.XML_DIR, "guest_device_address.xml")
+
+
 def _device_xml_dir():
     return paths.TEST_DIR
+
+
 boot_device_xml_path = os.path.join(paths.XML_DIR, "guest_device_address.xml")
 rom_xml_path = os.path.join(paths.XML_DIR, "pxe.xml")
 boot_index_xml_path = os.path.join(paths.XML_DIR, "boot_order.xml")
@@ -35,10 +37,10 @@ def run(file_name, device_addr):
     For others, device_addr is the pci address
     """
     temp_file = os.path.join(temp_path, file_name)
-    fd = open(temp_file, 'r')
+    fd = open(temp_file, "r")
     data = fd.read()
     fd.close()
-    if file_name.split('.')[0] == 'hugepage':
+    if file_name.split(".")[0] == "hugepage":
         hugepage_size = hugepage.get_hugepage_size()
         data = data.replace("NUM", hugepage_size)
         tmp_file = os.path.join(_device_xml_dir(), "hugepage_%s.xml" % device_addr)
@@ -56,7 +58,7 @@ def run(file_name, device_addr):
         tmp_file = os.path.join(_device_xml_dir(), "%s.xml" % device_addr)
 
     files.create(tmp_file)
-    fd = open(tmp_file, 'w')
+    fd = open(tmp_file, "w")
     fd.write(data)
     fd.close()
     return tmp_file
@@ -64,7 +66,7 @@ def run(file_name, device_addr):
 
 def get_device_xml_file(file_name, device_addr, managed="yes"):
     temp_file = os.path.join(temp_path, file_name)
-    with open(temp_file, 'r') as fd:
+    with open(temp_file, "r") as fd:
         data = fd.read()
     pci_handle = Pci(device_addr)
     domain = pci_handle.get_pci_domain()
@@ -79,7 +81,7 @@ def get_device_xml_file(file_name, device_addr, managed="yes"):
     data = data.replace("yes", managed)
     tmp_file = os.path.join(_device_xml_dir(), "%s.xml" % device_addr)
     files.create(tmp_file)
-    with open(tmp_file, 'w') as fd:
+    with open(tmp_file, "w") as fd:
         fd.write(data)
     return tmp_file
 
@@ -90,7 +92,12 @@ def get_specified_dev_addr_xml_str(device_addr):
     bus_num = pci_handle.get_pci_bus()
     slot_num = pci_handle.get_pci_slot()
     function_num = pci_handle.get_pci_function()
-    xml_replace_dict = {"DOMAIN": domain_num, "BUS": bus_num, "SLOT": slot_num, "FUNCTION": function_num}
+    xml_replace_dict = {
+        "DOMAIN": domain_num,
+        "BUS": bus_num,
+        "SLOT": slot_num,
+        "FUNCTION": function_num,
+    }
     with open(device_addr_xml, "r") as device_address_file:
         device_addr_xml_content = device_address_file.read()
     for i, j in xml_replace_dict.items():
@@ -101,7 +108,9 @@ def get_specified_dev_addr_xml_str(device_addr):
 def get_boot_way_xml(vm_boot_device="network"):
     with open(boot_device_xml_path, "r") as f:
         vm_boot_way_xml_content = f.read()
-    vm_boot_way_xml_content = vm_boot_way_xml_content.replace("BOOT_DEVICE", vm_boot_device)
+    vm_boot_way_xml_content = vm_boot_way_xml_content.replace(
+        "BOOT_DEVICE", vm_boot_device
+    )
     return vm_boot_way_xml_content
 
 
@@ -115,7 +124,9 @@ def get_rom_xml(id):
 def get_boot_index_xml(boot_order):
     with open(boot_index_xml_path, "r") as f:
         boot_index_xml_content = f.read()
-    boot_index_xml_content = boot_index_xml_content.replace("BOOT_ORDER", str(boot_order))
+    boot_index_xml_content = boot_index_xml_content.replace(
+        "BOOT_ORDER", str(boot_order)
+    )
     return boot_index_xml_content
 
 
@@ -142,16 +153,26 @@ def get_pcie_pci_bridge_xml(number=9):
 def get_virtio_bridge_xml(mac_address="52:54:00:68:c5:c5", source_bridge="switch"):
     with open(virtio_bridge_xml_path, "r") as f:
         virtio_bridge_xml_content = f.read()
-    xml_replace_dict = {"MAC_ADDRESS":mac_address, "SOURCE_BRIDGE":source_bridge}
+    xml_replace_dict = {"MAC_ADDRESS": mac_address, "SOURCE_BRIDGE": source_bridge}
     for i, j in xml_replace_dict.items():
         virtio_bridge_xml_content = virtio_bridge_xml_content.replace(i, j)
     return virtio_bridge_xml_content
 
 
-def get_macvtap_interface_xml(source_interface, mac_address="52:54:00:5d:a3:96", driver="vhost", mode="passthrough"):
+def get_macvtap_interface_xml(
+    source_interface,
+    mac_address="52:54:00:5d:a3:96",
+    driver="vhost",
+    mode="passthrough",
+):
     with open(macvtap_interface_xml_path, "r") as f:
         macvtap_interface_xml_content = f.read()
-    xml_replace_dict = {"INTERFACE":source_interface, "MAC_ADDRESS":mac_address, "MODE":mode, "DRIVER":driver}
+    xml_replace_dict = {
+        "INTERFACE": source_interface,
+        "MAC_ADDRESS": mac_address,
+        "MODE": mode,
+        "DRIVER": driver,
+    }
     for i, j in xml_replace_dict.items():
         macvtap_interface_xml_content = macvtap_interface_xml_content.replace(i, j)
     return macvtap_interface_xml_content

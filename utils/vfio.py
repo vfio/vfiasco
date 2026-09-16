@@ -9,22 +9,27 @@
 import logging
 
 log = logging.getLogger(__name__)
+import random
 import re
 import time
-import random
 
 from utils import process
 
 
 def create_vf(pf_address, numvfs, check_mac_address_flag=True):
     pf_address = pf_address.replace(r":", r"\:")
-    process.run("echo 0 > /sys/bus/pci/devices/%s/sriov_numvfs" % pf_address,
-                ignore_status=True)
-    result = process.run("echo %d > /sys/bus/pci/devices/%s/sriov_numvfs" % (int(numvfs), pf_address),
-                         ignore_status=True)
+    process.run(
+        "echo 0 > /sys/bus/pci/devices/%s/sriov_numvfs" % pf_address, ignore_status=True
+    )
+    result = process.run(
+        "echo %d > /sys/bus/pci/devices/%s/sriov_numvfs" % (int(numvfs), pf_address),
+        ignore_status=True,
+    )
     if result.exit_status != 0:
-        log.warning("Cannot create %d VFs on %s: %s" % (
-            numvfs, pf_address, result.stderr.decode().strip()))
+        log.warning(
+            "Cannot create %d VFs on %s: %s"
+            % (numvfs, pf_address, result.stderr.decode().strip())
+        )
         return []
     end_time = time.time() + int(numvfs) + 10
     while time.time() < end_time:
@@ -33,8 +38,10 @@ def create_vf(pf_address, numvfs, check_mac_address_flag=True):
             break
         time.sleep(0.5)
     else:
-        log.warning("Timed out waiting for %d VFs on %s, got %d" %
-                        (int(numvfs), pf_address, len(vf_list)))
+        log.warning(
+            "Timed out waiting for %d VFs on %s, got %d"
+            % (int(numvfs), pf_address, len(vf_list))
+        )
 
     if check_mac_address_flag:
         for vf_address in vf_list:
@@ -44,7 +51,9 @@ def create_vf(pf_address, numvfs, check_mac_address_flag=True):
             if mac_address == "00:00:00:00:00:00":
                 pf_interface_name = get_interface_name(pf_address)
                 if vf_has_trust_mode(pf_interface_name):
-                    set_vf_link_trust_mode_status(pf_interface_name, numvfs, status="on")
+                    set_vf_link_trust_mode_status(
+                        pf_interface_name, numvfs, status="on"
+                    )
                     get_vf_link_trust_mode(pf_interface_name)
                 setup_vf_mac_address(pf_interface_name, vf_index)
                 time.sleep(3)
@@ -134,12 +143,39 @@ def get_vf_mac_address_dict(vf_name):
 
 def setup_vf_mac_address(pf_name, index, is_ib=False):
     if is_ib:
-        mac = [0x52, 0x54, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-               0x00, random.randint(0x00, 0xff), random.randint(0x00, 0xff)]
-        random_mac_address = ':'.join(map(lambda x: "%02x" % x, mac))
+        mac = [
+            0x52,
+            0x54,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            random.randint(0x00, 0xFF),
+            random.randint(0x00, 0xFF),
+        ]
+        random_mac_address = ":".join(map(lambda x: "%02x" % x, mac))
     else:
-        mac = [0x52, 0x54, 0x00, random.randint(0x00, 0x7f), random.randint(0x00, 0xff), random.randint(0x00, 0xff)]
-        random_mac_address = ':'.join(map(lambda x: "%02x" % x, mac))
+        mac = [
+            0x52,
+            0x54,
+            0x00,
+            random.randint(0x00, 0x7F),
+            random.randint(0x00, 0xFF),
+            random.randint(0x00, 0xFF),
+        ]
+        random_mac_address = ":".join(map(lambda x: "%02x" % x, mac))
     cmd = "ip link set %s vf %s mac %s" % (pf_name, index, random_mac_address)
     process.run(cmd)
     return random_mac_address
@@ -148,8 +184,15 @@ def setup_vf_mac_address(pf_name, index, is_ib=False):
 def get_random_vf_mac_address_list(number):
     random_vf_mac_address_list = []
     for n in range(number):
-        mac = [0x52, 0x54, 0x00, random.randint(0x00, 0x7f), random.randint(0x00, 0xff), random.randint(0x00, 0xff)]
-        random_mac_address = ':'.join(map(lambda x: "%02x" % x, mac))
+        mac = [
+            0x52,
+            0x54,
+            0x00,
+            random.randint(0x00, 0x7F),
+            random.randint(0x00, 0xFF),
+            random.randint(0x00, 0xFF),
+        ]
+        random_mac_address = ":".join(map(lambda x: "%02x" % x, mac))
         random_vf_mac_address_list.append(random_mac_address)
     return random_vf_mac_address_list
 
@@ -160,8 +203,9 @@ def unbind_vf_driver(vf_address):
     cmd = "echo %s > /sys/bus/pci/drivers/mlx5_core/unbind" % vf_address
     result = process.run(cmd, ignore_status=True)
     if result.exit_status != 0:
-        log.error("Failed to unbind VF %s: %s" %
-                   (vf_address, result.stderr.decode().strip()))
+        log.error(
+            "Failed to unbind VF %s: %s" % (vf_address, result.stderr.decode().strip())
+        )
         return False
 
     return True
@@ -173,8 +217,10 @@ def setup_mlx_switchdev_mode(pf_address):
     cmd = "devlink dev eswitch set pci/%s mode switchdev" % pf_address
     result = process.run(cmd, ignore_status=True)
     if result.exit_status != 0:
-        log.error("Failed to set switchdev mode on %s: %s" %
-                   (pf_address, result.stderr.decode().strip()))
+        log.error(
+            "Failed to set switchdev mode on %s: %s"
+            % (pf_address, result.stderr.decode().strip())
+        )
         return False
 
     time.sleep(1)
@@ -188,10 +234,15 @@ def setup_mlx_switchdev_mode(pf_address):
 def enable_vf_migration(pf_address, vf_index=0):
     log.info("Enabling migration on VF %d of %s" % (vf_index, pf_address))
 
-    cmd = "devlink port function set pci/%s/%d migratable enable" % (pf_address, vf_index + 1)
+    cmd = "devlink port function set pci/%s/%d migratable enable" % (
+        pf_address,
+        vf_index + 1,
+    )
     result = process.run(cmd, ignore_status=True)
     if result.exit_status != 0:
-        log.error("Failed to enable migration on VF: %s" % result.stderr.decode().strip())
+        log.error(
+            "Failed to enable migration on VF: %s" % result.stderr.decode().strip()
+        )
         return False
 
     time.sleep(1)

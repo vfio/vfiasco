@@ -8,24 +8,24 @@
 
 import time
 
-from utils import qemu_vm
-from utils import logger
-from utils import config
-from utils import host
-from utils import migration_env
-from utils import paths
+from utils import config, host, logger, migration_env, paths, qemu_vm
 
 
 def run(feature, device_name, domain_name, machine_type, bios, numpfs=1, numvfs=0):
 
-    log = logger.create_logger(file_name="migrate_%s_after_hotplug_and_hotunplug_%s_test" % (domain_name, device_name))
+    log = logger.create_logger(
+        file_name="migrate_%s_after_hotplug_and_hotunplug_%s_test"
+        % (domain_name, device_name)
+    )
 
     config_list = ["host_devices.ini", "domains.ini", "migration.ini"]
     cfg = config.config_parser(config_list)
-    cfg = config.update_dict(cfg, 'domain', domain_name)
+    cfg = config.update_dict(cfg, "domain", domain_name)
     domain_cfg = cfg["domain"]
 
-    vm = qemu_vm.VM(domain_cfg, feature, device_name, machine_type, bios, numpfs, numvfs)
+    vm = qemu_vm.VM(
+        domain_cfg, feature, device_name, machine_type, bios, numpfs, numvfs
+    )
     test_device_list = host.get_test_device_list(feature, device_name, numpfs, numvfs)
 
     env = migration_env.setup_migration_env(cfg, feature, device_name, numvfs, log)
@@ -53,24 +53,44 @@ def run(feature, device_name, domain_name, machine_type, bios, numpfs=1, numvfs=
         vm.save_dmesg(session)
         domain_migration_result = vm.migrate_with_a_device(dest_ip_address)
         time.sleep(5)
-        dest_domstate = dest_session.execute_command(
-            "virsh domstate %s" % domain_name).decode().strip()
+        dest_domstate = (
+            dest_session.execute_command("virsh domstate %s" % domain_name)
+            .decode()
+            .strip()
+        )
         log.info("Domain state on destination after migration: %s" % dest_domstate)
         dest_running = dest_domstate == "running"
         if not dest_running:
-            log.error("Domain is not running on destination after migration (state: %s)" % dest_domstate)
+            log.error(
+                "Domain is not running on destination after migration (state: %s)"
+                % dest_domstate
+            )
 
     except Exception as migration_error:
         log.error("Test Failed as %s" % migration_error)
-        log.info("FAIL - migrate a %s vm after hotplug and hutunplug %s %s\n" %(domain_name, feature, device_name))
+        log.info(
+            "FAIL - migrate a %s vm after hotplug and hutunplug %s %s\n"
+            % (domain_name, feature, device_name)
+        )
         return False
     finally:
         migration_env.teardown_migration_env(env, vm, domain_name, log)
 
     log.remove_handler()
-    if hotplug_device_result and hotunplug_device_result and domain_migration_result and dest_running:
-        log.info("PASS - migrate a %s vm after hotplug and hutunplug %s %s\n" %(domain_name, feature, device_name))
+    if (
+        hotplug_device_result
+        and hotunplug_device_result
+        and domain_migration_result
+        and dest_running
+    ):
+        log.info(
+            "PASS - migrate a %s vm after hotplug and hutunplug %s %s\n"
+            % (domain_name, feature, device_name)
+        )
         return True
     else:
-        log.info("FAIL - migrate a %s vm after hotplug and hutunplug %s %s\n" %(domain_name, feature, device_name))
+        log.info(
+            "FAIL - migrate a %s vm after hotplug and hutunplug %s %s\n"
+            % (domain_name, feature, device_name)
+        )
         return False

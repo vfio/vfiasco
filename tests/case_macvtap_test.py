@@ -8,26 +8,38 @@
 
 import time
 
-from utils import qemu_vm
-from utils import logger
-from utils import config
-from utils import host
-from utils import domain
-from utils import virsh
+from utils import config, domain, host, logger, qemu_vm, virsh
 
 
-def run(feature, device_name, domain_name,machine_type, bios, macvtap_driver, numpfs=1, numvfs=1):
-    test_time = time.strftime('%Y_%m_%d_%H:%M:%S', time.localtime())
-    log = logger.create_logger(file_name="boot_a_vm_with_%s_macvtap_%s_%s_test" % (macvtap_driver, device_name, feature))
+def run(
+    feature,
+    device_name,
+    domain_name,
+    machine_type,
+    bios,
+    macvtap_driver,
+    numpfs=1,
+    numvfs=1,
+):
+    test_time = time.strftime("%Y_%m_%d_%H:%M:%S", time.localtime())
+    log = logger.create_logger(
+        file_name="boot_a_vm_with_%s_macvtap_%s_%s_test"
+        % (macvtap_driver, device_name, feature)
+    )
 
-    log.info("========== case: boot a vm with %s macvtap + %s %s test============" % (macvtap_driver, device_name, feature))
-    log.info('')
+    log.info(
+        "========== case: boot a vm with %s macvtap + %s %s test============"
+        % (macvtap_driver, device_name, feature)
+    )
+    log.info("")
 
     config_list = ["host_devices.ini", "domains.ini"]
     cfg = config.config_parser(config_list)
-    domain_cfg = config.update_dict(cfg, 'domain', domain_name)["domain"]
+    domain_cfg = config.update_dict(cfg, "domain", domain_name)["domain"]
 
-    vm = qemu_vm.VM(domain_cfg, feature, device_name, machine_type, bios, numpfs, numvfs)
+    vm = qemu_vm.VM(
+        domain_cfg, feature, device_name, machine_type, bios, numpfs, numvfs
+    )
 
     test_result_list = []
     if not host.has_interface("virbr0"):
@@ -35,7 +47,9 @@ def run(feature, device_name, domain_name,machine_type, bios, macvtap_driver, nu
 
     try:
         if "win" not in domain_name:
-            test_device_list = host.get_test_device_list(feature, device_name, numpfs, numvfs)
+            test_device_list = host.get_test_device_list(
+                feature, device_name, numpfs, numvfs
+            )
         elif "win" in domain_name:
             test_device_list = []
         time.sleep(3)
@@ -47,15 +61,24 @@ def run(feature, device_name, domain_name,machine_type, bios, macvtap_driver, nu
             vm.boot_with_macvtap_device(ifname, mac_address, macvtap_driver)
             session = vm.wait_for_login()
             if vm.check_virtio_device(session, mac_address):
-                log.info("boot a vm with %s macvtap + %s %s successfully" % (macvtap_driver, feature, device_name))
+                log.info(
+                    "boot a vm with %s macvtap + %s %s successfully"
+                    % (macvtap_driver, feature, device_name)
+                )
             else:
-                log.error("FAIL - boot a vm with %s macvtap + %s %s test\n" % (macvtap_driver, device_name, feature))
+                log.error(
+                    "FAIL - boot a vm with %s macvtap + %s %s test\n"
+                    % (macvtap_driver, device_name, feature)
+                )
                 log.remove_handler()
                 return False
             vm.save_dmesg(session)
 
             for i in range(5):
-                log.info("============== reboot domain inside for the %s times ============" % (i + 1))
+                log.info(
+                    "============== reboot domain inside for the %s times ============"
+                    % (i + 1)
+                )
                 session.execute_command("reboot")
                 session = vm.wait_for_login()
                 if vm.check_virtio_device(session, mac_address):
@@ -66,7 +89,10 @@ def run(feature, device_name, domain_name,machine_type, bios, macvtap_driver, nu
             time.sleep(3)
 
             for i in range(5):
-                log.info("============== system_reset domain for the %s times ==============" % (i + 1))
+                log.info(
+                    "============== system_reset domain for the %s times =============="
+                    % (i + 1)
+                )
                 domain.reset_domain(domain_name)
                 session = vm.wait_for_login()
                 if vm.check_virtio_device(session, mac_address):
@@ -87,10 +113,16 @@ def run(feature, device_name, domain_name,machine_type, bios, macvtap_driver, nu
         vm.clean_env()
 
     if "Failed" not in test_result_list:
-        log.info("PASS - boot a vm with %s macvtap + %s %s test\n" % (macvtap_driver, device_name, feature))
+        log.info(
+            "PASS - boot a vm with %s macvtap + %s %s test\n"
+            % (macvtap_driver, device_name, feature)
+        )
         log.remove_handler()
         return True
     else:
-        log.error("FAIL - boot a vm with %s macvtap + %s %s test\n" % (macvtap_driver, device_name, feature))
+        log.error(
+            "FAIL - boot a vm with %s macvtap + %s %s test\n"
+            % (macvtap_driver, device_name, feature)
+        )
         log.remove_handler()
         return False

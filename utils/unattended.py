@@ -6,17 +6,16 @@
 #
 # SPDX-License-Identifier: GPL-2.0-only
 
+import glob
+import logging
+import os
 import shutil
 import tempfile
-import glob
-import os
-import logging
 
 log = logging.getLogger(__name__)
 import stat
 
-from utils import process
-from utils import commands
+from utils import commands, process
 
 
 def create_ks_url(unattended_file):
@@ -25,13 +24,17 @@ def create_ks_url(unattended_file):
     dst_dir = "/var/www/html"
     shutil.copy(unattended_file, dst_dir)
 
-def create_unattended_iso(cdrom_unattended, cdrom_virtio, unattended_file, tmp_path="/var/tmp/cdrom"):
+
+def create_unattended_iso(
+    cdrom_unattended, cdrom_virtio, unattended_file, tmp_path="/var/tmp/cdrom"
+):
     if not os.path.exists(tmp_path):
         os.makedirs(tmp_path)
     boot_disk = CdromDisk(cdrom_unattended, tmp_path)
     boot_disk.setup_virtio(cdrom_virtio)
     boot_disk.copy_to(unattended_file)
     boot_disk.close()
+
 
 def mount(src, dst, fstype=None, options=None):
     """
@@ -45,17 +48,17 @@ def mount(src, dst, fstype=None, options=None):
 
     :return: if mounted return True else return False
     """
-    options = (options and [options] or [''])[0]
+    options = (options and [options] or [""])[0]
     if is_mount(src, dst, fstype, options):
-        if 'remount' not in options:
-            options = 'remount,%s' % options
-    cmd = ['mount']
+        if "remount" not in options:
+            options = "remount,%s" % options
+    cmd = ["mount"]
     if fstype:
-        cmd.extend(['-t', fstype])
+        cmd.extend(["-t", fstype])
     if options:
-        cmd.extend(['-o', options])
+        cmd.extend(["-o", options])
     cmd.extend([src, dst])
-    cmd = ' '.join(cmd)
+    cmd = " ".join(cmd)
     return process.run(cmd).exit_status == 0
 
 
@@ -97,8 +100,8 @@ def is_mount(src, dst=None, fstype=None, options=None):
     :return: True if mounted, else return False
     """
     mount_str = "%s %s %s" % (src, dst, fstype)
-    mount_str = mount_str.replace('None', '').strip()
-    mount_list_cmd = 'cat /proc/mounts'
+    mount_str = mount_str.replace("None", "").strip()
+    mount_list_cmd = "cat /proc/mounts"
 
     mount_result = os.popen(mount_list_cmd).read()
 
@@ -113,7 +116,8 @@ def is_mount(src, dst=None, fstype=None, options=None):
             return True
     return False
 
-def copytree(src, dst, overwrite=True, ignore=''):
+
+def copytree(src, dst, overwrite=True, ignore=""):
     """
     Copy dirs from source to target.
 
@@ -138,7 +142,8 @@ def copytree(src, dst, overwrite=True, ignore=''):
                 else:
                     continue
             shutil.copy(src_file, dst_dir)
-    
+
+
 def cleanup(folder):
     """
     If folder is a mountpoint, do what is possible to unmount it. Afterwards,
@@ -150,7 +155,8 @@ def cleanup(folder):
     umount(None, folder)
     if os.path.isdir(folder):
         shutil.rmtree(folder)
-    
+
+
 def clean_old_image(image):
     """
     Clean a leftover image file from previous processes. If it contains a
@@ -165,13 +171,12 @@ def clean_old_image(image):
 
 
 class CdromDisk(object):
-
     """
     Represents a CDROM disk that we can master according to our needs.
     """
 
     def __init__(self, unattended_iso, tmpdir):
-        self.mount = tempfile.mkdtemp(prefix='cdrom_virttest_', dir=tmpdir)
+        self.mount = tempfile.mkdtemp(prefix="cdrom_virttest_", dir=tmpdir)
         self.tmpdir = tmpdir
         self.path = unattended_iso
         clean_old_image(self.path)
@@ -181,7 +186,6 @@ class CdromDisk(object):
     def get_answer_file_path(self, filename):
         return os.path.join(self.mount, filename)
 
-    
     def copy_to(self, src):
         dest_fname = "autounattend.xml"
         log.debug("Copying %s to disk image mount", src)
@@ -199,10 +203,10 @@ class CdromDisk(object):
         2) Copy its contents to the root of the unattended install cdrom
         """
         pwd = os.getcwd()
-        mnt_pnt = tempfile.mkdtemp(prefix='cdrom_virtio_', dir=self.tmpdir)
-        mount(cdrom_virtio, mnt_pnt, options='loop,ro')
+        mnt_pnt = tempfile.mkdtemp(prefix="cdrom_virtio_", dir=self.tmpdir)
+        mount(cdrom_virtio, mnt_pnt, options="loop,ro")
         try:
-            copytree(mnt_pnt, self.mount, ignore='*.vfd')
+            copytree(mnt_pnt, self.mount, ignore="*.vfd")
         finally:
             os.chdir(pwd)
             umount(None, mnt_pnt)
@@ -216,13 +220,16 @@ class CdromDisk(object):
 
     def close(self):
         log.info("Creating unattended install CD image %s" % self.path)
-        g_cmd = ('mkisofs -o %s -max-iso9660-filenames '
-                 '-relaxed-filenames -D --input-charset iso8859-1 '
-                 '%s' % (self.path, self.mount))
+        g_cmd = (
+            "mkisofs -o %s -max-iso9660-filenames "
+            "-relaxed-filenames -D --input-charset iso8859-1 "
+            "%s" % (self.path, self.mount)
+        )
         process.run(g_cmd)
 
-        os.chmod(self.path, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP |
-                 stat.S_IROTH | stat.S_IXOTH)
+        os.chmod(
+            self.path,
+            stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH,
+        )
         cleanup(self.mount)
-        log.debug("unattended install CD image %s successfully created",
-                      self.path)
+        log.debug("unattended install CD image %s successfully created", self.path)

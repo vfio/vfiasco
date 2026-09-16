@@ -8,24 +8,24 @@
 
 import time
 
-from utils import qemu_vm
-from utils import logger
-from utils import config
-from utils import host
-from utils import numa
-from utils import virsh
+from utils import config, host, logger, numa, qemu_vm, virsh
 
 
-def run(feature, device_name, domain_name,machine_type, bios, numpfs=1, numvfs=0):
-    test_time = time.strftime('%Y_%m_%d_%H:%M:%S', time.localtime())
-    log = logger.create_logger(file_name="numa_test-boot_with_1vm_%spf_%svf_%s" % (numpfs, numvfs, device_name))
+def run(feature, device_name, domain_name, machine_type, bios, numpfs=1, numvfs=0):
+    test_time = time.strftime("%Y_%m_%d_%H:%M:%S", time.localtime())
+    log = logger.create_logger(
+        file_name="numa_test-boot_with_1vm_%spf_%svf_%s" % (numpfs, numvfs, device_name)
+    )
 
-    log.info("========== case: numa_test - boot a vm with %s pf and %s vf '%s'============" % (numpfs, numvfs, device_name))
-    log.info('')
+    log.info(
+        "========== case: numa_test - boot a vm with %s pf and %s vf '%s'============"
+        % (numpfs, numvfs, device_name)
+    )
+    log.info("")
 
     config_list = ["host_devices.ini", "domains.ini"]
     cfg = config.config_parser(config_list)
-    domain_cfg = config.update_dict(cfg, 'domain', domain_name)["domain"]
+    domain_cfg = config.update_dict(cfg, "domain", domain_name)["domain"]
     device_cfg = cfg[device_name]
 
     vcpus = int(domain_cfg.get("vcpu", 2))
@@ -33,11 +33,17 @@ def run(feature, device_name, domain_name,machine_type, bios, numpfs=1, numvfs=0
     num_cells = min(vcpus, 4)
     mem_per_cell = total_mem_kib // num_cells
 
-    vm = qemu_vm.VM(domain_cfg, feature, device_name, machine_type, bios, numpfs, numvfs)
+    vm = qemu_vm.VM(
+        domain_cfg, feature, device_name, machine_type, bios, numpfs, numvfs
+    )
     if "win" in domain_name:
-        test_device_list = host.get_windows_test_device_list(feature, device_name, numpfs, numvfs)
+        test_device_list = host.get_windows_test_device_list(
+            feature, device_name, numpfs, numvfs
+        )
     else:
-        test_device_list = host.get_test_device_list(feature, device_name, numpfs, numvfs)
+        test_device_list = host.get_test_device_list(
+            feature, device_name, numpfs, numvfs
+        )
 
     if feature == "pf" and device_cfg["exclusive_iommu"] == "no" and numpfs == 1:
         pf_list = device_cfg["device_addr"].split(",")
@@ -51,19 +57,38 @@ def run(feature, device_name, domain_name,machine_type, bios, numpfs=1, numvfs=0
         session = vm.wait_for_login()
         if "win" not in domain_name:
             check_device_number_result = vm.check_device(session, test_device_list)
-            check_numa_in_guest = numa.check_numa_node_num_in_guest(session, numa_node_num=num_cells)
+            check_numa_in_guest = numa.check_numa_node_num_in_guest(
+                session, numa_node_num=num_cells
+            )
             vm.save_dmesg(session)
-            check_numa_in_hmp = numa.check_numa_policy_in_hmp(domain_name, num_cells=num_cells)
-            check_numa_in_procs = numa.check_numa_policy_in_procs(domain_name, memory=mem_per_cell, num_cells=num_cells)
-            check_result = check_device_number_result & check_numa_in_guest & check_numa_in_hmp & check_numa_in_procs
+            check_numa_in_hmp = numa.check_numa_policy_in_hmp(
+                domain_name, num_cells=num_cells
+            )
+            check_numa_in_procs = numa.check_numa_policy_in_procs(
+                domain_name, memory=mem_per_cell, num_cells=num_cells
+            )
+            check_result = (
+                check_device_number_result
+                & check_numa_in_guest
+                & check_numa_in_hmp
+                & check_numa_in_procs
+            )
         elif "win" in domain_name:
             time.sleep(10)
             vm.save_ipconfig_info(session)
-            check_device_number_result = vm.check_device_number_in_windows_vm(session, test_device_list)
+            check_device_number_result = vm.check_device_number_in_windows_vm(
+                session, test_device_list
+            )
             time.sleep(5)
-            check_numa_in_hmp = numa.check_numa_policy_in_hmp(domain_name, num_cells=num_cells)
-            check_numa_in_procs = numa.check_numa_policy_in_procs(domain_name, memory=mem_per_cell, num_cells=num_cells)
-            check_result = check_device_number_result & check_numa_in_hmp & check_numa_in_procs
+            check_numa_in_hmp = numa.check_numa_policy_in_hmp(
+                domain_name, num_cells=num_cells
+            )
+            check_numa_in_procs = numa.check_numa_policy_in_procs(
+                domain_name, memory=mem_per_cell, num_cells=num_cells
+            )
+            check_result = (
+                check_device_number_result & check_numa_in_hmp & check_numa_in_procs
+            )
 
     except Exception as err:
         log.error("Test failed as %s" % err)
@@ -77,10 +102,16 @@ def run(feature, device_name, domain_name,machine_type, bios, numpfs=1, numvfs=0
                 virsh.nodedev_reattach(pf_address)
 
     if check_result:
-        log.info("PASS - numa test with %s pf and %s vf of %s\n" %(numpfs, numvfs, device_name))
+        log.info(
+            "PASS - numa test with %s pf and %s vf of %s\n"
+            % (numpfs, numvfs, device_name)
+        )
         log.remove_handler()
         return True
     else:
-        log.error("FAIL - numa test with %s pf and %s vf of %s\n" %(numpfs, numvfs, device_name))
+        log.error(
+            "FAIL - numa test with %s pf and %s vf of %s\n"
+            % (numpfs, numvfs, device_name)
+        )
         log.remove_handler()
         return False

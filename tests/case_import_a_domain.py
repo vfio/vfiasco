@@ -8,21 +8,18 @@
 
 import os
 
-from utils import host
-from utils import config
-from utils import logger
-from utils import process
-from utils import files
-from utils import pci_utils
-from utils import virsh
-from utils import paths
+from utils import config, files, host, logger, paths, pci_utils, process, virsh
 
 
-def run(feature, device_name, domain_name, machine_type, bios="seabios", disk_bus="virtio"):
-    log = logger.create_logger(file_name="import_a_%s_%s_%s_domain" % (machine_type, bios, domain_name))
-    config_list = ['domains.ini', "vfiasco.ini", "host_devices.ini"]
+def run(
+    feature, device_name, domain_name, machine_type, bios="seabios", disk_bus="virtio"
+):
+    log = logger.create_logger(
+        file_name="import_a_%s_%s_%s_domain" % (machine_type, bios, domain_name)
+    )
+    config_list = ["domains.ini", "vfiasco.ini", "host_devices.ini"]
     cfg = config.config_parser(config_list)
-    cfg = config.update_dict(cfg, 'domain', domain_name)
+    cfg = config.update_dict(cfg, "domain", domain_name)
 
     domain_cfg = cfg["domain"]
     domain_name = domain_cfg["name"]
@@ -33,12 +30,14 @@ def run(feature, device_name, domain_name, machine_type, bios="seabios", disk_bu
     if _device_type == "disk":
         numpfs = 1
         numvfs = 0
-        test_device_list = host.get_test_device_list(feature, device_name, numpfs, numvfs)
+        test_device_list = host.get_test_device_list(
+            feature, device_name, numpfs, numvfs
+        )
         device_info = test_device_list[0]
         pci_address = device_info[0]
         nodedev_address = pci_utils.get_nodedev_address(pci_address)
         image_str = " --nodisks "
-        hostdev_str = " --hostdev %s " %(nodedev_address)
+        hostdev_str = " --hostdev %s " % (nodedev_address)
         disk_str = image_str + hostdev_str
 
     elif _device_type in ("nic", "usb"):
@@ -46,10 +45,16 @@ def run(feature, device_name, domain_name, machine_type, bios="seabios", disk_bu
         image_size = domain_cfg["image_size"]
         image_name = domain_cfg["image_name"]
         full_image_name = os.path.join(paths.OUTPUT_IMAGE_DIR, image_name)
-        disk_str = " --disk path=%s,bus=%s,cache=none,format=qcow2,io=threads,size=%s " % (full_image_name, disk_bus, image_size)
-    log.info("check and remove the existed switch and enp1s0 connection from the import image")
+        disk_str = (
+            " --disk path=%s,bus=%s,cache=none,format=qcow2,io=threads,size=%s "
+            % (full_image_name, disk_bus, image_size)
+        )
+    log.info(
+        "check and remove the existed switch and enp1s0 connection from the import image"
+    )
     process.run("yum -y install guestfs-tools >> /dev/null")
-    process.run(f'''
+    process.run(
+        f"""
     virt-customize -a {full_image_name} --run <(echo '
     #!/bin/bash
     set -e
@@ -68,24 +73,27 @@ method=auto
 EOF
     chmod 600 /etc/NetworkManager/system-connections/enp1s0.nmconnection
     ')
-    ''', shell=True)
+    """,
+        shell=True,
+    )
 
     display_type = domain_cfg["display_type"]
     display_port = domain_cfg["display_port"]
     mac_addr = domain_cfg["mac_addr"]
 
-    cmd_str = ("virt-install "
-               "--machine=%s "
-               "--noreboot "
-               "--name=%s "
-               "--memory=%s "
-               "--vcpus=%s "
-               "--graphics type=%s,port=%s,listen=0.0.0.0 "
-               "--osinfo detect=on,require=off "
-               "--check all=off "
-               "--import --noautoconsole " % (machine_type, domain_name,
-                                                               memory, vcpus, display_type,
-                                                               display_port))
+    cmd_str = (
+        "virt-install "
+        "--machine=%s "
+        "--noreboot "
+        "--name=%s "
+        "--memory=%s "
+        "--vcpus=%s "
+        "--graphics type=%s,port=%s,listen=0.0.0.0 "
+        "--osinfo detect=on,require=off "
+        "--check all=off "
+        "--import --noautoconsole "
+        % (machine_type, domain_name, memory, vcpus, display_type, display_port)
+    )
 
     if host.has_interface("switch"):
         bridge_interface = "switch"
@@ -109,7 +117,9 @@ EOF
     if virsh.domain_exists(domain_name):
         virsh.undefine(domain_name)
 
-    log.info("import a %s %s %s on a %s disk" % (machine_type, bios, domain_name, disk_bus))
+    log.info(
+        "import a %s %s %s on a %s disk" % (machine_type, bios, domain_name, disk_bus)
+    )
     log.info("Command line %s" % cmd_str)
     try:
         process.run("yum -y install virt-install >> /dev/null")

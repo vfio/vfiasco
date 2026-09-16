@@ -10,21 +10,20 @@ import logging
 import os
 import time
 
-from utils import config
-from utils import paths
+from utils import config, paths
 
-_cfg = config.config_parser(['vfiasco.ini'])
+_cfg = config.config_parser(["vfiasco.ini"])
 _LEVELS = {
-    'DEBUG':    logging.DEBUG,
-    'INFO':     logging.INFO,
-    'WARNING':  logging.WARNING,
-    'ERROR':    logging.ERROR,
-    'CRITICAL': logging.CRITICAL,
+    "DEBUG": logging.DEBUG,
+    "INFO": logging.INFO,
+    "WARNING": logging.WARNING,
+    "ERROR": logging.ERROR,
+    "CRITICAL": logging.CRITICAL,
 }
-_console_level = _LEVELS[_cfg['logging']['console_level'].upper()]
-_file_level    = _LEVELS[_cfg['logging']['file_level'].upper()]
+_console_level = _LEVELS[_cfg["logging"]["console_level"].upper()]
+_file_level = _LEVELS[_cfg["logging"]["file_level"].upper()]
 
-_fmt = logging.Formatter('%(asctime)s %(levelname)-5.5s| %(message)s', '%H:%M:%S')
+_fmt = logging.Formatter("%(asctime)s %(levelname)-5.5s| %(message)s", "%H:%M:%S")
 
 
 def _setup_root_logger():
@@ -41,10 +40,14 @@ _setup_root_logger()
 
 
 class Logger:
-    def __init__(self, logger_name, log_file, clevel=logging.INFO, Flevel=logging.DEBUG):
+    def __init__(
+        self, logger_name, log_file, clevel=logging.INFO, Flevel=logging.DEBUG
+    ):
         self.logger = logging.getLogger(logger_name)
         self.logger.setLevel(logging.DEBUG)
-        fmt = logging.Formatter('%(asctime)s %(levelname)-5.5s| %(message)s', '%H:%M:%S')
+        fmt = logging.Formatter(
+            "%(asctime)s %(levelname)-5.5s| %(message)s", "%H:%M:%S"
+        )
         self.sh = logging.StreamHandler()
         self.sh.setFormatter(fmt)
         self.sh.setLevel(clevel)
@@ -91,7 +94,9 @@ class Logger:
         return False
 
 
-def create_logger(logger_name='', file_name='', log_path=None, clevel=None, flevel=None):
+def create_logger(
+    logger_name="", file_name="", log_path=None, clevel=None, flevel=None
+):
     if log_path is None:
         log_path = paths.TEST_DIR
     if clevel is None:
@@ -101,12 +106,11 @@ def create_logger(logger_name='', file_name='', log_path=None, clevel=None, flev
     if not os.path.exists(log_path):
         os.makedirs(log_path)
 
-    log_file = os.path.join(log_path, 'test.log')
+    log_file = os.path.join(log_path, "test.log")
     if os.path.exists(log_file):
         os.remove(log_file)
 
     if not logger_name:
-        logger_name = file_name or 'test'
+        logger_name = file_name or "test"
     logger = Logger(logger_name, log_file, clevel=clevel, Flevel=flevel)
     return logger
-
