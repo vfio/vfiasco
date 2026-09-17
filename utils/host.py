@@ -1910,3 +1910,20 @@ def extract_timestamp(line):
     if match:
         return float(match.group(1))
     return None
+
+
+def get_domain_vfio_memory_map(domain_name):
+    """Get a domain memory map and return the vfio information or none in case of an error."""
+    pid_cmd = "pgrep -f 'guest=%s,'" % domain_name
+    (ret, pid) = commands.getstatusoutput(pid_cmd)
+    pid = pid.rstrip("\n")
+    if ret == 0:
+        mmap_cmd = "cat /proc/%s/maps | grep vfio" % pid
+        (ret, mmap) = commands.getstatusoutput(mmap_cmd)
+        if ret == 0:
+            return mmap
+        else:
+            log.error("Fail to find a memory map for PID %s" % pid)
+    else:
+        log.error("Fail to get domain PID")
+    return None
