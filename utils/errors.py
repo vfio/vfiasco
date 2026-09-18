@@ -13,11 +13,15 @@ Scans test artifacts after each test completes and writes errors.log
 under the test directory when problems are found (empty tests produce
 no report). Same per-test-report pattern as ttw.py.
 
-Sources are added incrementally, framework-level first:
+Sources are added incrementally, framework-level first, then
+system-level:
   test.log      framework-level errors (exceptions, FAIL results, ...)
+  host_dmesg    host kernel/VFIO/IOMMU/PCIe errors
+  libvirt.log   libvirt/QEMU domain, migration, device, resource errors
+  vm_dmesg      guest kernel driver/PCI/network/MMIO errors
 
-Remaining sources (libvirt.log, host_dmesg, vm_dmesg, iperf3.log) are
-added in later phases (system-level, then device-specific).
+Remaining sources (iperf3.log, workload errors) not yet added.
+Device-specific sources (vGPU, GIM, etc.) are a separate, later phase.
 """
 
 import os
@@ -73,16 +77,164 @@ _RESULT_PATTERNS = OrderedDict(
 # the result token after '|' is extracted).
 _SUMMARY_RESULT = re.compile(r"\|\s*(\S+)\s+-")
 
+# Shared by host_dmesg and vm_dmesg: generic kernel crash signatures that
+# look the same regardless of which side of the guest boundary they're on.
+_KERNEL_GENERAL_PATTERN = re.compile(
+    r"BUG:|WARNING:|Call Trace:|Oops:|RIP:|kernel panic|hung_task|"
+    r"soft lockup|detected stall",
+    re.I,
+)
 
-def _scan_test_log(lines):
-    """Scan test.log lines for framework-level errors."""
+_HOST_DMESG_PATTERNS = OrderedDict(
+    [
+        (
+            "vfio",
+            re.compile(
+                r"vfio-pci.*: Failed|iommu fault|DMAR: DRHD|"
+                r"page request failure|failed to stop IOMMU",
+                re.I,
+            ),
+        ),
+        ("iommu", re.compile(r"AMD-Vi:|DMAR:.*fault|IO_PAGE_FAULT", re.I)),
+        (
+            "pci_sriov",
+            re.compile(
+                r"AER:.*?(?:Error|Fault|Fail|Multiple|Uncorrected|Corrected)|"
+                r"PCIe? Bus Error|"
+                r"severity=(?:Correctable|Uncorrectable)|"
+                r"(?:can't|Unable to) change power state|"
+                r"BAR.*failed",
+                re.I,
+            ),
+        ),
+        (
+            "device",
+            re.compile(
+                r"Hardware Error|\bNMI\b|Machine check|"
+                r"igb.*error|igb.*reset|ixgbe.*error|ixgbe.*reset",
+                re.I,
+            ),
+        ),
+        (
+            "memory",
+            re.compile(r"Out of memory|page allocation failure|" r"oom-kill", re.I),
+        ),
+        ("general", _KERNEL_GENERAL_PATTERN),
+    ]
+)
+
+_VM_DMESG_PATTERNS = OrderedDict(
+    [
+        (
+            "driver_probe",
+            re.compile(
+                r"probe.*failed|failed to initialize|" r"cannot assign|No such device",
+                re.I,
+            ),
+        ),
+        (
+            "pci",
+            re.compile(
+                r"BAR.*collision|no resource|not responding|"
+                r"Cannot.*enable.*device|can't enable|"
+                r"pci_request_regions failed|No usable DMA configuration",
+                re.I,
+            ),
+        ),
+        (
+            "network",
+            re.compile(
+                r"link is not ready|Link is Down|reset adapter|timeout|"
+                r"igb.*error|igbvf.*error|ixgbe.*error|ixgbevf.*error|"
+                r"Detected Tx Unit Hang|PCIe link lost|Adapter removed",
+                re.I,
+            ),
+        ),
+        (
+            "mmio",
+            re.compile(r"Invalid write|Invalid read|rejected|unhandled address", re.I),
+        ),
+        (
+            "memory",
+            re.compile(
+                r"Out of memory|Killed process|page allocation failure|"
+                r"oom-kill|__vm_enough_memory|not enough memory for the allocation",
+                re.I,
+            ),
+        ),
+        ("general", _KERNEL_GENERAL_PATTERN),
+    ]
+)
+
+# 'domain' is checked last: its phrases (internal error, operation failed)
+# are the most generic in the table, so a more specific category above
+# should win first.
+_LIBVIRT_LOG_PATTERNS = OrderedDict(
+    [
+        (
+            "resource",
+            re.compile(
+                r"Cannot allocate memory|Unable to reserve|" r"Address already in use",
+                re.I,
+            ),
+        ),
+        (
+            "qemu",
+            re.compile(
+                r"qemu unexpectedly closed|monitor.*closed|"
+                r"did not respond|Segmentation fault|"
+                r"\bAborted\b|assert.*failed|"
+                r"reason=crashed",
+                re.I,
+            ),
+        ),
+        (
+            "migration",
+            re.compile(
+                r"migration failed|migration blocked|timed out|"
+                r"cannot migrate|postcopy[ _]failed|savevm.*error|"
+                r"load.*state.*error|device state.*failed",
+                re.I,
+            ),
+        ),
+        (
+            "device",
+            re.compile(
+                r"Cannot use.*device|cannot find VFIO device|"
+                r"cannot open VFIO device|Device.*not found|"
+                r"no such host device|No provided host device|"
+                r"host device.*not found|"
+                r"VFIO.*error|"
+                r"iommu_group|Failed to.*attach|Failed to mmap|"
+                r"Failed to set.*group|group.*is not viable|"
+                r"IOAS.*failed|spapr|error.*iommufd|iommufd.*error|"
+                r"IOMMU device passthrough.*does not match|"
+                r"failed to.*passthrough",
+                re.I,
+            ),
+        ),
+        (
+            "domain",
+            re.compile(
+                r"internal error|operation failed|"
+                r"domain is not running|unable to.*domain",
+                re.I,
+            ),
+        ),
+    ]
+)
+
+
+def _scan_lines(lines, patterns, exclude=None):
+    """Categorize each line against an ordered pattern table; first match wins."""
+    exclude = exclude or {}
     errors = []
     for i, line in enumerate(lines):
-        for category, pattern in _TEST_LOG_PATTERNS.items():
+        for category, pattern in patterns.items():
             if not pattern.search(line):
                 continue
-            exclude = _EXCLUDE.get(category)
-            if exclude and exclude.search(line):
+            excl = exclude.get(category)
+            if excl and excl.search(line):
                 continue
             errors.append(
                 {
@@ -95,11 +247,77 @@ def _scan_test_log(lines):
     return errors
 
 
-# filename -> scan function; new sources are appended here.
+def _scan_test_log(lines):
+    """Scan test.log lines for framework-level errors."""
+    return _scan_lines(lines, _TEST_LOG_PATTERNS, _EXCLUDE)
+
+
+# 'VF Reset msg received' is the PF driver's routine log of a VF resetting
+# itself (normal during VF driver load/boot/unload) - not a hardware fault.
+_HOST_DMESG_EXCLUDE = {
+    "device": re.compile(r"VF Reset msg received", re.I),
+}
+
+
+def _scan_host_dmesg(lines):
+    """Scan host_dmesg for kernel/VFIO/IOMMU/PCIe errors."""
+    return _scan_lines(lines, _HOST_DMESG_PATTERNS, _HOST_DMESG_EXCLUDE)
+
+
+def _scan_vm_dmesg(lines):
+    """Scan one guest dmesg capture for driver/PCI/network/MMIO errors."""
+    return _scan_lines(lines, _VM_DMESG_PATTERNS)
+
+
+def _scan_vm_dmesg_source(test_dir):
+    """Scan every guest dmesg capture for a test.
+
+    Two different multi-file naming schemes exist: vm_dmesg, vm_dmesg.0,
+    .1, ... (one per reboot cycle within a single domain - reuses
+    ttw.py's file discovery) and vm0_dmesg, vm1_dmesg, ... (one per
+    domain, for multi-domain tests like boot_multidomain_test).
+    """
+    from utils.ttw import _discover_dmesg_files
+
+    dmesg_paths = set()
+    for _idx, path in _discover_dmesg_files(os.path.join(test_dir, "vm_dmesg")):
+        dmesg_paths.add(path)
+    for name in os.listdir(test_dir):
+        if re.match(r"vm\d+_dmesg$", name):
+            dmesg_paths.add(os.path.join(test_dir, name))
+    errors = []
+    for path in sorted(dmesg_paths):
+        with open(path, errors="replace") as f:
+            errors.extend(_scan_vm_dmesg(f.readlines()))
+    return errors
+
+
+def _scan_libvirt_log(lines):
+    """Scan libvirt.log for libvirt and QEMU-via-libvirt errors."""
+    return _scan_lines(lines, _LIBVIRT_LOG_PATTERNS)
+
+
+def _single_file_loader(filename, scan_fn):
+    """Build a test_dir -> errors loader for a source that's always one file."""
+
+    def _load(test_dir):
+        path = os.path.join(test_dir, filename)
+        if not os.path.isfile(path):
+            return []
+        with open(path, errors="replace") as f:
+            return scan_fn(f.readlines())
+
+    return _load
+
+
+# source name -> loader(test_dir); new sources are appended here.
 
 _SOURCES = OrderedDict(
     [
-        ("test.log", _scan_test_log),
+        ("test.log", _single_file_loader("test.log", _scan_test_log)),
+        ("host_dmesg", _single_file_loader("host_dmesg", _scan_host_dmesg)),
+        ("libvirt.log", _single_file_loader("libvirt.log", _scan_libvirt_log)),
+        ("vm_dmesg", _scan_vm_dmesg_source),
     ]
 )
 
@@ -107,15 +325,10 @@ _SOURCES = OrderedDict(
 def scan_test_dir(test_dir):
     """Scan a test directory; return source -> error list, omitting clean sources."""
     report = OrderedDict()
-    for filename, scan_fn in _SOURCES.items():
-        path = os.path.join(test_dir, filename)
-        if not os.path.isfile(path):
-            continue
-        with open(path, errors="replace") as f:
-            lines = f.readlines()
-        errors = scan_fn(lines)
+    for name, loader in _SOURCES.items():
+        errors = loader(test_dir)
         if errors:
-            report[filename] = errors
+            report[name] = errors
     return report
 
 
