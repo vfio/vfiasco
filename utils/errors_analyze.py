@@ -106,9 +106,13 @@ def _print_details(rows):
         for source, errs in report.items():
             print("  %s (%d)" % (source, len(errs)))
             for err in errs:
+                # Show source_file if present (for vm_dmesg multi-file sources)
+                source_info = (
+                    (" [%s]" % err["source_file"]) if "source_file" in err else ""
+                )
                 print(
-                    "    L%-6d [%-12s] %s"
-                    % (err["line"], err["category"], err["text"].strip())
+                    "    L%-6d [%-12s]%s %s"
+                    % (err["line"], err["category"], source_info, err["text"].strip())
                 )
 
 

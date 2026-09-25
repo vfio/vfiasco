@@ -95,7 +95,14 @@ _HOST_DMESG_PATTERNS = OrderedDict(
                 re.I,
             ),
         ),
-        ("iommu", re.compile(r"AMD-Vi:|DMAR:.*fault|IO_PAGE_FAULT", re.I)),
+        (
+            "iommu",
+            re.compile(
+                r"AMD-Vi:.*(?:Event logged|fault|Failed|Error|Unable|timed out|Completion-Wait)|"
+                r"DMAR:.*fault|IO_PAGE_FAULT",
+                re.I,
+            ),
+        ),
         (
             "pci_sriov",
             re.compile(
@@ -144,7 +151,7 @@ _VM_DMESG_PATTERNS = OrderedDict(
         (
             "network",
             re.compile(
-                r"link is not ready|Link is Down|reset adapter|timeout|"
+                r"link is not ready|Link is Down|reset adapter|timed out|"
                 r"igb.*error|igbvf.*error|ixgbe.*error|ixgbevf.*error|"
                 r"Detected Tx Unit Hang|PCIe link lost|Adapter removed",
                 re.I,
@@ -287,8 +294,13 @@ def _scan_vm_dmesg_source(test_dir):
             dmesg_paths.add(os.path.join(test_dir, name))
     errors = []
     for path in sorted(dmesg_paths):
+        source_file = os.path.basename(path)  # e.g., "vm_dmesg.0", "vm1_dmesg"
         with open(path, errors="replace") as f:
-            errors.extend(_scan_vm_dmesg(f.readlines()))
+            file_errors = _scan_vm_dmesg(f.readlines())
+            # Add source file info to each error for traceability
+            for err in file_errors:
+                err["source_file"] = source_file
+            errors.extend(file_errors)
     return errors
 
 
@@ -403,9 +415,11 @@ def report_text(test_name, result, report):
         lines.append("  %s (%d)" % (source, len(errs)))
         lines.append("  %s" % ("-" * 68))
         for err in errs:
+            # Show source_file if present (for vm_dmesg multi-file sources)
+            source_info = (" [%s]" % err["source_file"]) if "source_file" in err else ""
             lines.append(
-                "    L%-6d [%-12s] %s"
-                % (err["line"], err["category"], err["text"].strip())
+                "    L%-6d [%-12s]%s %s"
+                % (err["line"], err["category"], source_info, err["text"].strip())
             )
         total += len(errs)
     lines.append("")
