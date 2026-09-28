@@ -61,7 +61,9 @@ _feature = _parsed["feature"]
 _valid_machine_types = set(MACHINE_BIOS)
 _valid_bios = set(MACHINE_BIOS.values())
 if _feature and _feature not in ("pf", "vf", "vgpu", "mdev_vgpu"):
-    _errors.append(f"Invalid --feature '{_feature}' — must be 'pf', 'vf', 'vgpu', or 'mdev_vgpu'")
+    _errors.append(
+        f"Invalid --feature '{_feature}' — must be 'pf', 'vf', 'vgpu', or 'mdev_vgpu'"
+    )
 if _machine_type and _machine_type not in _valid_machine_types:
     _errors.append(
         f"Invalid --machine_type '{_machine_type}' — must be one of: {', '.join(sorted(_valid_machine_types))}"
@@ -336,7 +338,9 @@ def pretest_check(device_name, feature="", domain="", machine_type="", bios=""):
 
     # ── Enumerated parameter values ──────────────────────────────────────────
     if feature and feature not in ("pf", "vf", "vgpu", "mdev_vgpu"):
-        errors.append(f"Invalid --feature '{feature}' — must be 'pf', 'vf', 'vgpu', or 'mdev_vgpu'")
+        errors.append(
+            f"Invalid --feature '{feature}' — must be 'pf', 'vf', 'vgpu', or 'mdev_vgpu'"
+        )
 
     # ── device_name and domain exist in config ───────────────────────────────
     try:

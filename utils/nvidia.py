@@ -10,7 +10,7 @@ import logging
 import os
 import time
 
-from utils import commands, process
+from utils import commands, files, paths, process
 
 log = logging.getLogger(__name__)
 
@@ -90,3 +90,84 @@ def set_vgpu_type(vf_addr, vgpu_type_id):
         )
         return False
     return True
+
+
+def pci_addr_to_nodedev_parent(pci_addr):
+    return "pci_" + pci_addr.replace(":", "_").replace(".", "_")
+
+
+def _mdev_nodedev_name(uuid, vf_addr):
+    uuid_part = uuid.replace("-", "_")
+    addr_part = vf_addr.replace(":", "_").replace(".", "_")
+    return "mdev_%s_%s" % (uuid_part, addr_part)
+
+
+def check_mdev_supported_type(vf_addr, mdev_type):
+    path = "/sys/class/mdev_bus/%s/mdev_supported_types/%s" % (vf_addr, mdev_type)
+    if os.path.isdir(path):
+        log.info("mdev type %s available on VF %s" % (mdev_type, vf_addr))
+        return True
+    log.error(
+        "mdev type %s not found under /sys/class/mdev_bus/%s/mdev_supported_types/"
+        % (mdev_type, vf_addr)
+    )
+    return False
+
+
+def create_mdev(vf_addr, mdev_type):
+    if not check_mdev_supported_type(vf_addr, mdev_type):
+        return None, None
+
+    result = process.run("uuidgen", ignore_status=True)
+    if result.exit_status != 0:
+        log.error("Failed to generate UUID: %s" % result.stderr.decode().strip())
+        return None, None
+    uuid = result.stdout.decode().strip()
+
+    parent = pci_addr_to_nodedev_parent(vf_addr)
+    nodedev_name = _mdev_nodedev_name(uuid, vf_addr)
+
+    xml_content = (
+        "<device>\n"
+        "  <parent>%s</parent>\n"
+        '  <capability type="mdev">\n'
+        '    <type id="%s"/>\n'
+        "    <uuid>%s</uuid>\n"
+        "  </capability>\n"
+        "</device>" % (parent, mdev_type, uuid)
+    )
+
+    xml_path = os.path.join(paths.TEST_DIR, "mdev_%s.xml" % uuid)
+    files.create(xml_path)
+    files.write_content(xml_path, xml_content)
+
+    log.info("Defining mdev %s (type=%s, parent=%s)" % (uuid, mdev_type, parent))
+    result = process.run("virsh nodedev-define %s" % xml_path, ignore_status=True)
+    if result.exit_status != 0:
+        log.error("Failed to define mdev: %s" % result.stderr.decode().strip())
+        return None, None
+
+    log.info("Starting mdev %s" % nodedev_name)
+    result = process.run("virsh nodedev-start %s" % nodedev_name, ignore_status=True)
+    if result.exit_status != 0:
+        log.error(
+            "Failed to start mdev %s: %s"
+            % (nodedev_name, result.stderr.decode().strip())
+        )
+        process.run("virsh nodedev-undefine %s" % nodedev_name, ignore_status=True)
+        return None, None
+
+    result = process.run(
+        "virsh nodedev-autostart %s" % nodedev_name, ignore_status=True
+    )
+    if result.exit_status != 0:
+        log.warning("Failed to set autostart on mdev %s" % nodedev_name)
+
+    log.info("mdev %s created and started successfully" % nodedev_name)
+    return uuid, nodedev_name
+
+
+def destroy_mdev(nodedev_name):
+    log.info("Destroying mdev %s" % nodedev_name)
+    process.run("virsh nodedev-destroy %s" % nodedev_name, ignore_status=True)
+    process.run("virsh nodedev-undefine %s" % nodedev_name, ignore_status=True)
