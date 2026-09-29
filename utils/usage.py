@@ -86,10 +86,11 @@ Options:
         guest OS profile (defined in domains.ini)
         available: %(domains)s
 
-    --feature {pf,vf,vgpu}
-        pf:   test VFIO-PF / NVMe passthrough
-        vf:   test VFIO-VF (SR-IOV)
-        vgpu: test NVIDIA (SR-IOV) vGPU
+    --feature {pf,vf,vgpu,mdev_vgpu}
+        pf:        test VFIO-PF / NVMe passthrough
+        vf:        test VFIO-VF (SR-IOV)
+        vgpu:      test NVIDIA (SR-IOV) vGPU
+        mdev_vgpu: test NVIDIA mdev (mediated device) vGPU
 
     --device_name DEVICE
         PCI device to test (defined in host_devices.ini)
