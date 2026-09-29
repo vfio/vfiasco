@@ -44,6 +44,9 @@ def run(file_name, device_addr):
         hugepage_size = hugepage.get_hugepage_size()
         data = data.replace("NUM", hugepage_size)
         tmp_file = os.path.join(_device_xml_dir(), "hugepage_%s.xml" % device_addr)
+    elif file_name.split(".")[0] == "mdev_vgpu":
+        data = data.replace("UUID", device_addr)
+        tmp_file = os.path.join(_device_xml_dir(), "mdev_%s.xml" % device_addr)
     else:
         pci_handle = Pci(device_addr)
         domain = pci_handle.get_pci_domain()

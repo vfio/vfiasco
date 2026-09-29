@@ -42,7 +42,7 @@ def run(feature, device_name, domain_name, machine_type, bios, numpfs=1, numvfs=
             feature, device_name, numpfs, numvfs
         )
 
-    if feature != "vgpu":
+    if feature not in ("vgpu", "mdev_vgpu"):
         for device in test_device_list:
             device_address = device[0]
             virsh.nodedev_detach(device_address)
