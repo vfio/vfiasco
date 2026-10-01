@@ -50,17 +50,6 @@ dnf install -y \
 | `nvidia_vgpu_vfio` | NVIDIA vGPU VFIO — loaded by NVIDIA GRID driver (vGPU tests only) |
 | `gim` | AMD GPU SR-IOV (AMD vGPU tests only) |
 
-### Python dependencies
-
-```bash
-dnf install -y python3-pip
-pip install -r requirements.txt
-```
-
-| Package | Purpose |
-|---------|---------|
-| `paramiko` | SSH and SFTP connections into guest VMs |
-
 ### Guest VM
 
 The framework creates the VM automatically on first test run if it does not exist.

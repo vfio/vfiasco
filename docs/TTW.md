@@ -13,7 +13,7 @@ T1     PCI device enumerated          dmesg     pci 0000:XX:XX.X: [...] type NN 
 T2     Memory Space Enable (MSE)      dmesg     enabling device (0000 -> 0002+)
 T3     Driver probe completed         dmesg     <driver> <addr>: ...
 T4     Device operational             dmesg     NIC Link is Up / nvme ready
-T5     Guest SSH reachable            host      paramiko Connected (version 2.0)
+T5     Guest SSH reachable            host      SSH connection established
 T6     First workload on device       host      ping / iperf3 / fio command sent
 ```
 

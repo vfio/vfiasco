@@ -6,22 +6,31 @@
 #
 # SPDX-License-Identifier: GPL-2.0-only
 
-import json
 import logging
 import os
+import random
 import re
 import socket
+import subprocess
 import time
 
-import paramiko
-
 log = logging.getLogger(__name__)
-import random
 
 from utils import config, files, host, paths, process
 
 
-class SSHConnection(object):
+class SSHConnection:
+    _SSH_OPTS = [
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "UserKnownHostsFile=/dev/null",
+        "-o",
+        "LogLevel=ERROR",
+        "-o",
+        "PubkeyAuthentication=no",
+    ]
+
     def __init__(
         self, hostname, username="root", passwd="redhat", port=22, timeout=3600
     ):
@@ -30,63 +39,59 @@ class SSHConnection(object):
         self.username = username
         self.passwd = passwd
         self.timeout = timeout
-        self.session = None
 
     def connect(self):
-        session = paramiko.SSHClient()
-        session.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        session.connect(
-            hostname=self.hostname,
-            username=self.username,
-            password=self.passwd,
-            timeout=self.timeout,
-            allow_agent=False,
-            look_for_keys=False,
-        )
-        self.session = session
+        self._run("true", timeout=min(self.timeout, 30))
         log.info("Connect to remote server:%s" % self.hostname)
+
+    def _run(self, cmd, timeout=300):
+        ssh_cmd = [
+            "sshpass",
+            "-p",
+            self.passwd,
+            "ssh",
+            *self._SSH_OPTS,
+            "-p",
+            str(self.port),
+            "%s@%s" % (self.username, self.hostname),
+            cmd,
+        ]
+        return subprocess.run(ssh_cmd, capture_output=True, timeout=timeout)
 
     def execute_command(self, cmd, timeout=300):
         log.info(
             "[session] send command '%s' to %s through session" % (cmd, self.hostname)
         )
         try:
-            stdin, stdout, stderr = self.session.exec_command(cmd, timeout=timeout)
-            stderr = stderr.read()
-            stdout = stdout.read()
+            r = self._run(cmd, timeout=timeout)
+            return r.stdout
         except Exception as error:
             log.error("Execute command %s failed: %s" % (cmd, error))
             return b""
-        return stdout
 
     def get_cmd_status(self, cmd, timeout=300):
         log.info(
             "[session] send command '%s' to %s through session" % (cmd, self.hostname)
         )
-        stdin, stdout, stderr = self.session.exec_command(cmd, timeout=timeout)
-        channel = stdout.channel
-        status = channel.recv_exit_status()
-        return status
+        r = self._run(cmd, timeout=timeout)
+        return r.returncode
 
     def get_output_status(self, cmd, timeout=300):
         log.info(
             "[session] send command '%s' to %s through session" % (cmd, self.hostname)
         )
         try:
-            stdin, stdout, stderr = self.session.exec_command(cmd, timeout=timeout)
-            status = stdout.channel.recv_exit_status()
-            stderr = stderr.read()
-            stdout = stdout.read()
+            r = self._run(cmd, timeout=timeout)
+            if r.returncode != 0:
+                log.error("Execute command %s failed: %s" % (cmd, r.stderr))
+                return r.returncode, r.stderr
+            return r.returncode, r.stdout
         except Exception as e:
             log.error("Execute command %s failed: %s" % (cmd, e))
             return 1, b""
-        if status != 0:
-            log.error("Execute command %s failed: %s" % (cmd, stderr))
-            return status, stderr
-        return status, stdout
 
     def close(self):
-        self.session.close()
+        pass
 
 
 def is_ssh_available(ip):
@@ -137,31 +142,33 @@ def get_remote_obj(ip, username, passwd, port="22", timeout=120, wait_reboot=Tru
 
 
 def scp_to_remote(host, username, password, local_path, remote_path, timeout=30):
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(host, username=username, password=password, timeout=timeout)
-    try:
-        sftp = client.open_sftp()
-        remote_file = remote_path.rstrip("/") + "/" + os.path.basename(local_path)
-        sftp.put(local_path, remote_file)
-        sftp.close()
-        log.debug("scp_to_remote: %s → %s:%s" % (local_path, host, remote_file))
-    finally:
-        client.close()
+    remote_file = remote_path.rstrip("/") + "/" + os.path.basename(local_path)
+    cmd = [
+        "sshpass",
+        "-p",
+        password,
+        "scp",
+        *SSHConnection._SSH_OPTS,
+        local_path,
+        "%s@%s:%s" % (username, host, remote_file),
+    ]
+    subprocess.run(cmd, check=True, timeout=timeout)
+    log.debug("scp_to_remote: %s → %s:%s" % (local_path, host, remote_file))
 
 
 def scp_from_remote(host, username, password, remote_path, local_path, timeout=30):
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(host, username=username, password=password, timeout=timeout)
-    try:
-        sftp = client.open_sftp()
-        local_file = os.path.join(local_path, os.path.basename(remote_path))
-        sftp.get(remote_path, local_file)
-        sftp.close()
-        log.debug("scp_from_remote: %s:%s → %s" % (host, remote_path, local_file))
-    finally:
-        client.close()
+    local_file = os.path.join(local_path, os.path.basename(remote_path))
+    cmd = [
+        "sshpass",
+        "-p",
+        password,
+        "scp",
+        *SSHConnection._SSH_OPTS,
+        "%s@%s:%s" % (username, host, remote_path),
+        local_file,
+    ]
+    subprocess.run(cmd, check=True, timeout=timeout)
+    log.debug("scp_from_remote: %s:%s → %s" % (host, remote_path, local_file))
 
 
 def is_installed(session, package_name):

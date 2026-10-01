@@ -29,17 +29,6 @@ if "--version" in sys.argv or "-V" in sys.argv:
 
 import platform
 
-_missing_modules = []
-for _mod in ("paramiko",):
-    try:
-        __import__(_mod)
-    except ImportError:
-        _missing_modules.append(_mod)
-if _missing_modules:
-    print("Missing required Python modules: %s" % ", ".join(_missing_modules))
-    print("Install with: dnf install python3-paramiko  (EPEL required)")
-    sys.exit(1)
-
 # Validate pure CLI parameters before the heavy import chain triggers
 # module-level sysfs probing in host.py (VF create/destroy at import time).
 from utils.setup_domain import ARCH_MACHINE_TYPE, ARCH_VALID_MACHINE_TYPES, MACHINE_BIOS
@@ -263,6 +252,7 @@ def pretest_check(device_name, feature="", domain="", machine_type="", bios=""):
 
     # ── Required binaries ────────────────────────────────────────────────────
     required_bins = {
+        "sshpass": "sshpass",
         "virsh": "libvirt-client",
         "virt-xml": "virt-install",
         "ip": "iproute",
