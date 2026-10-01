@@ -2679,7 +2679,7 @@ def hugepage_1G_hotunplug_test(feature, device_name, domain, machine_type, bios)
         return False
 
 
-def create_destory_guest_with_device_100_times_test(
+def create_destroy_guest_with_device_100_times_test(
     feature, device_name, domain, machine_type, bios
 ):
     log_file = get_log_file_path(feature, device_name, domain)

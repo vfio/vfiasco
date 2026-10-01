@@ -125,7 +125,7 @@ TEST_LIST = [
         "run the test about Start/shutdown guest with VF for 100 times",
     ),
     (
-        "create_destory_guest_with_device_100_times_test",
+        "create_destroy_guest_with_device_100_times_test",
         "run the test about Create then destroy the vm which has a PF/VF for 100 times",
     ),
     (
@@ -394,7 +394,7 @@ TEST_LOOPS = [
         [
             "hotplug_and_hotunplug_500_times_test",
             "start_shutdown_with_device_100_times_test",
-            "create_destory_guest_with_device_100_times_test",
+            "create_destroy_guest_with_device_100_times_test",
             "repeatedly_create_and_disable_vf_test",
             "check_memory_leaks_test",
             "remove_pf_driver_while_vf_is_used",
