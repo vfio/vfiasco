@@ -92,7 +92,7 @@ def set_vgpu_type(vf_addr, vgpu_type_id):
     return True
 
 
-def pci_addr_to_nodedev_parent(pci_addr):
+def _pci_addr_to_nodedev_parent(pci_addr):
     return "pci_" + pci_addr.replace(":", "_").replace(".", "_")
 
 
@@ -124,7 +124,7 @@ def create_mdev(vf_addr, mdev_type):
         return None, None
     uuid = result.stdout.decode().strip()
 
-    parent = pci_addr_to_nodedev_parent(vf_addr)
+    parent = _pci_addr_to_nodedev_parent(vf_addr)
     nodedev_name = _mdev_nodedev_name(uuid, vf_addr)
 
     xml_content = (
