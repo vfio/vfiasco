@@ -1,0 +1,5 @@
+    <hostdev mode='subsystem' type='mdev' managed='no' model='vfio-pci' display='on' ramfb='on'>
+      <source>
+        <address uuid='UUID'/>
+      </source>
+    </hostdev>
