@@ -36,7 +36,7 @@ project and largely refactored using claude-sonnet-4-6.
 
 ## How it works
 
-VFiasco uses **libvirt** to manage VMs and **paramiko/SSH** to run commands
+VFiasco uses **libvirt** to manage VMs and **SSH** (`sshpass` + OpenSSH) to run commands
 inside the guest. Before each test it calls `prepare_domain()` which creates
 the VM automatically from a CentOS Stream 10 cloud image if it does not already
 exist. Device fields (`max_vfs`, `exclusive_iommu`, `device_pattern`, ...) are
@@ -67,7 +67,6 @@ are out of scope.
 ├── domain_xml/          # libvirt XML templates
 ├── unattended/          # kickstart files for VM installation (optional, user-created)
 ├── docs/                # detailed documentation
-├── requirements.txt
 └── output/                      # all runtime output (created on first run)
     ├── images/                  # VM disk images (qcow2) and backups (shared across runs)
     └── <run_id>/                # per-run directory (e.g. 20260728_140318_pf_igb_nic_rhel10_q35_seabios)
@@ -106,8 +105,7 @@ More examples in [Examples](docs/EXAMPLES.md).
 ## Usage
 
 Before running any test, `vfiasco.py` performs a **pretest check** that verifies:
-- Required Python modules are available (`paramiko`)
-- Required binaries are present (`virsh`, `virt-xml`, `ip`)
+- Required binaries are present (`sshpass`, `virsh`, `virt-xml`, `ip`)
 - `vfio-pci` kernel module is loadable
 - `--device_name` exists in `host_devices.ini` and its `device_addr` is present in sysfs
 - `--domain` exists in `domains.ini`; `--feature`, `--machine_type`, `--bios` are valid values

@@ -12,7 +12,7 @@ into CI where possible.
 - **ttw-capture.sh** - merge standalone capture script into main - [RHEL-224684](https://redhat.atlassian.net/browse/RHEL-224684)
 - **Logging refactor** - utility modules (process, remote, virsh) log via named loggers that only reach test.log through a root logger file handler; output before attach or after detach is lost, and the boundary between test logger and root logger is fragile
 - **Error analysis** - `errors.save_report()` + `errors_analyze.py` (same 3-step pattern as TTW and migration) - [RHEL-224196](https://redhat.atlassian.net/browse/RHEL-224196)
-- **Remove paramiko dependency** - replace with subprocess ssh/scp calls; requires SSH key auth on all hosts (password auth is the blocker)
+- ~~**Remove paramiko dependency**~~ — done: replaced with `sshpass` + OpenSSH subprocess calls
 - **Guest provisioning** - improve VM image setup (install packages, kernel-devel, selftests dependencies) beyond current cloud-init/virt-customize
 
 ### Test coverage
