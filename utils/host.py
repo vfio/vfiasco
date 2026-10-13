@@ -303,7 +303,7 @@ def get_device_list_with_pattern(feature, device_name, numvfs=0):
                 "vgpu requires vgpu_type in host_devices.ini for '%s'" % device_name
             )
         creatable_types = nvidia.get_creatable_vgpu_types(vf_addr)
-        if creatable_types and vgpu_type not in creatable_types:
+        if not creatable_types or vgpu_type not in creatable_types:
             raise RuntimeError(
                 "vGPU type '%s' is not creatable on %s. Creatable types: %s"
                 % (vgpu_type, vf_addr, ", ".join(sorted(creatable_types)))
@@ -323,6 +323,11 @@ def get_device_list_with_pattern(feature, device_name, numvfs=0):
             )
         mdev_type = "nvidia-%s" % vgpu_type
         supported_types_path = "/sys/class/mdev_bus/%s/mdev_supported_types" % pf_addr
+        mdev_path_exists = os.path.exists(supported_types_path)
+        if not mdev_path_exists:
+            raise RuntimeError(
+                "mdev supported types path doesn't exist: '%s'" % supported_types_path
+            )
         supported_types = os.listdir(supported_types_path)
         if mdev_type not in supported_types:
             raise RuntimeError(
