@@ -41,7 +41,7 @@ def run(
     # Detect device type - storage devices don't create network interfaces
     device_driver = host.host_devices_cfg.get(device_name, {}).get("device_driver", "")
     is_storage_device = device_driver in ("nvme", "nvme_core")
-    is_vgpu_device = feature == "vgpu"
+    is_vgpu_device = feature in ("vgpu", "mdev_vgpu")
 
     target_ip_addr = cfg.get(device_name, {}).get("test_ip_addr", "")
     has_network = bool(target_ip_addr)

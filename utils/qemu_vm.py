@@ -559,7 +559,9 @@ class VM(object):
             device_addr = device[0]
             vgpu_specific = paths.XML_DIR + "/%s_vgpu.xml" % self.device_name
             device_specific = paths.XML_DIR + "/%s.xml" % self.device_name
-            if device[1] == "vgpu" and os.path.exists(vgpu_specific):
+            if device[1] == "mdev_vgpu":
+                device_type = "mdev_vgpu"
+            elif device[1] == "vgpu" and os.path.exists(vgpu_specific):
                 device_type = self.device_name + "_vgpu"
             elif os.path.exists(device_specific):
                 device_type = self.device_name
@@ -1875,6 +1877,8 @@ class VM(object):
                 if item[1] == "vgpu":
                     device_num_vf += 1
                     has_vgpu = True
+                if item[1] == "mdev_vgpu":
+                    device_num_pf += 1
                 # if item[1] == 'gpu':
                 #     device_num_pf = 1
                 #     break                #     device_num_vf = 1
@@ -2021,7 +2025,7 @@ class VM(object):
             device_type = device_info[1]
             if device_type in ("pf", "gpu"):
                 pattern = device_pattern_pf
-            elif device_type == "vgpu":
+            elif device_type in ("vgpu", "mdev_vgpu"):
                 pattern = self.device_info.get("device_pattern_vgpu", device_pattern_pf)
             else:
                 pattern = device_pattern_vf
@@ -2576,7 +2580,9 @@ class VM(object):
             device_addr = device[0]
             vgpu_specific = paths.XML_DIR + "/%s_vgpu.xml" % self.device_name
             device_specific = paths.XML_DIR + "/%s.xml" % self.device_name
-            if device[1] == "vgpu" and os.path.exists(vgpu_specific):
+            if device[1] == "mdev_vgpu":
+                device_type = "mdev_vgpu"
+            elif device[1] == "vgpu" and os.path.exists(vgpu_specific):
                 device_type = self.device_name + "_vgpu"
             elif os.path.exists(device_specific):
                 device_type = self.device_name
