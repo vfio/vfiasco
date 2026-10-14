@@ -21,6 +21,7 @@ from utils import commands, config, files, nvidia, paths, process, vfio, virsh
 
 _QEMU_CANDIDATES = ("qemu-kvm", "qemu-system-x86_64", "qemu-system-aarch64")
 _qemu_bin_override = None
+_active_mdev_devices = []
 
 
 def qemu_binary():
@@ -297,12 +298,49 @@ def get_device_list_with_pattern(feature, device_name, numvfs=0):
             raise RuntimeError("Failed to enable NVIDIA VFs on %s" % pf_addr)
         vf_addr = vf_list[0]
         vgpu_type = host_devices_cfg[device_name].get("vgpu_type", "")
-        if vgpu_type:
-            if not nvidia.set_vgpu_type(vf_addr, vgpu_type):
-                raise RuntimeError(
-                    "Failed to set vGPU type %s on %s" % (vgpu_type, vf_addr)
-                )
+        if not vgpu_type:
+            raise RuntimeError(
+                "vgpu requires vgpu_type in host_devices.ini for '%s'" % device_name
+            )
+        creatable_types = nvidia.get_creatable_vgpu_types(vf_addr)
+        if not creatable_types or vgpu_type not in creatable_types:
+            raise RuntimeError(
+                "vGPU type '%s' is not creatable on %s. Creatable types: %s"
+                % (vgpu_type, vf_addr, ", ".join(sorted(creatable_types)))
+            )
+        if not nvidia.set_vgpu_type(vf_addr, vgpu_type):
+            raise RuntimeError(
+                "Failed to set vGPU type %s on %s" % (vgpu_type, vf_addr)
+            )
         device_list = [vf_addr]
+    elif feature == "mdev_vgpu":
+        pf_addr = device_list[0]
+        vgpu_type = host_devices_cfg[device_name].get("vgpu_type", "")
+        if not vgpu_type:
+            raise RuntimeError(
+                "mdev_vgpu requires vgpu_type in host_devices.ini for '%s'"
+                % device_name
+            )
+        mdev_type = "nvidia-%s" % vgpu_type
+        supported_types_path = "/sys/class/mdev_bus/%s/mdev_supported_types" % pf_addr
+        mdev_path_exists = os.path.exists(supported_types_path)
+        if not mdev_path_exists:
+            raise RuntimeError(
+                "mdev supported types path doesn't exist: '%s'" % supported_types_path
+            )
+        supported_types = os.listdir(supported_types_path)
+        if mdev_type not in supported_types:
+            raise RuntimeError(
+                "mdev type '%s' is not supported on %s. Supported types: %s"
+                % (mdev_type, pf_addr, ", ".join(sorted(supported_types)))
+            )
+        uuid, nodedev_name = nvidia.create_mdev(pf_addr, mdev_type)
+        if not nodedev_name:
+            raise RuntimeError(
+                "Failed to create mdev device (type=%s) on %s" % (mdev_type, pf_addr)
+            )
+        _active_mdev_devices.append(nodedev_name)
+        device_list = [uuid]
     return [device_pattern_pf, device_pattern_vf], device_list
 
 
@@ -375,6 +413,12 @@ def get_test_device_list(feature, device_name, numpfs, numvfs):
             device_pattern = device_pattern[1]
             for i in range(len(test_device_list)):
                 test_device_list[i] = [test_device_list[i], "vgpu", device_pattern]
+    if feature == "mdev_vgpu":
+        if int(numpfs) == 1 and not numvfs:
+            test_device_list = device_list[:1]
+            device_pattern = device_pattern[0]
+            for i in range(len(test_device_list)):
+                test_device_list[i] = [test_device_list[i], "mdev_vgpu", device_pattern]
     return test_device_list
 
 
