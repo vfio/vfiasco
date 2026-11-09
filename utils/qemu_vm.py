@@ -1879,11 +1879,11 @@ class VM(object):
                     has_vgpu = True
                 if item[1] == "mdev_vgpu":
                     device_num_pf += 1
-                # if item[1] == 'gpu':
-                #     device_num_pf = 1
-                #     break                #     device_num_vf = 1
-                #     device_pattern_vf = self.device_name
-                #     break
+
+            if has_vgpu:
+                device_pattern_vf = self.device_info.get(
+                    "device_pattern_vgpu", device_pattern_pf
+                )
 
             if device_num_pf and device_num_vf:
                 if device_pattern_pf == device_pattern_vf:
@@ -2491,6 +2491,8 @@ class VM(object):
                         "Could not redefine domain from %s: %s" % (self.init_xml, e)
                     )
         if self.feature == "vf" and self.numvfs != 0 and clear_vf:
+            host.disable_vf(self.device_name)
+        if self.feature == "vgpu":
             host.disable_vf(self.device_name)
         if self.feature == "mdev_vgpu":
             host.cleanup_mdev_devices()

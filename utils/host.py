@@ -163,6 +163,12 @@ def compute_device_info(pf_addrs, backend=None):
     computed.setdefault("device_pattern_vf", "Virtual Function")
     computed.setdefault("vf_driver", "")
 
+    # ── device_pattern_vgpu (NVIDIA SR-IOV vGPU) ───────────────────────────
+    # After sriov-manage -e, NVIDIA VFs present with the PF name inside the VM.
+    sriov_manage = "/usr/lib/nvidia/sriov-manage"
+    if backend.path_exists(sriov_manage) and "device_pattern_pf" in computed:
+        computed["device_pattern_vgpu"] = computed["device_pattern_pf"]
+
     return computed
 
 
@@ -416,9 +422,11 @@ def get_test_device_list(feature, device_name, numpfs, numvfs):
     if feature == "vgpu":
         if int(numpfs) == 0 and numvfs:
             test_device_list = device_list[:numvfs]
-            device_pattern = device_pattern[1]
+            vgpu_pattern = host_devices_cfg[device_name].get(
+                "device_pattern_vgpu", device_pattern[0]
+            )
             for i in range(len(test_device_list)):
-                test_device_list[i] = [test_device_list[i], "vgpu", device_pattern]
+                test_device_list[i] = [test_device_list[i], "vgpu", vgpu_pattern]
     if feature == "mdev_vgpu":
         if int(numpfs) == 1 and not numvfs:
             test_device_list = device_list[:1]

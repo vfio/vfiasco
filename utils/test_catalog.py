@@ -428,6 +428,16 @@ TEST_LOOPS = [
         ],
     ),
     (
+        "migration-vgpu",
+        "Live migration (NVIDIA SR-IOV vGPU)",
+        [
+            "live_migrate_with_device",
+            "cancel_live_migrate_with_device",
+            "cancel_and_live_migrate_with_device",
+            "live_migrate_after_hotplug_hotunplug_device",
+        ],
+    ),
+    (
         "migration-failover",
         "Live migration (failover VF)",
         [

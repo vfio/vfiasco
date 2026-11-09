@@ -3892,6 +3892,9 @@ def live_migrate_with_device(feature, device_name, domain, machine_type, bios):
     if feature == "vf":
         numpfs = 0
         numvfs = 1
+    if feature == "vgpu":
+        numpfs = 0
+        numvfs = 1
     test_result = case_live_migrate_with_device.run(
         feature, device_name, domain, machine_type, bios, numpfs, numvfs
     )
@@ -3941,6 +3944,9 @@ def live_migrate_with_device_iperf(feature, device_name, domain, machine_type, b
     if feature == "vf":
         numpfs = 0
         numvfs = 1
+    if feature == "vgpu":
+        numpfs = 0
+        numvfs = 1
     test_result = case_live_migrate_with_device_iperf.run(
         feature, device_name, domain, machine_type, bios, numpfs, numvfs
     )
@@ -3988,6 +3994,9 @@ def cancel_live_migrate_with_device(feature, device_name, domain, machine_type, 
         numpfs = 1
         numvfs = 0
     if feature == "vf":
+        numpfs = 0
+        numvfs = 1
+    if feature == "vgpu":
         numpfs = 0
         numvfs = 1
     test_result = case_cancel_live_migrate_with_device.run(
@@ -4041,6 +4050,9 @@ def cancel_and_live_migrate_with_device(
     if feature == "vf":
         numpfs = 0
         numvfs = 1
+    if feature == "vgpu":
+        numpfs = 0
+        numvfs = 1
     test_result = case_cancel_and_live_migrate_with_device.run(
         feature, device_name, domain, machine_type, bios, numpfs, numvfs
     )
@@ -4090,6 +4102,9 @@ def live_migrate_after_hotplug_hotunplug_device(
         numpfs = 1
         numvfs = 0
     if feature == "vf":
+        numpfs = 0
+        numvfs = 1
+    if feature == "vgpu":
         numpfs = 0
         numvfs = 1
     test_result = case_live_migrate_after_hotplug_and_hotunplug_device.run(

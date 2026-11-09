@@ -164,6 +164,40 @@ def setup_migration_env(cfg, feature, device_name, numvfs, log):
                 log.warning(
                     "Could not find device config for %s on destination" % device_name
                 )
+        elif feature == "vgpu":
+            dest_device_cfg = cfg.get(device_name)
+            if dest_device_cfg:
+                dest_pf_addrs = [
+                    addr.strip() for addr in dest_device_cfg["device_addr"].split(",")
+                ]
+                dest_pf_addr = dest_pf_addrs[0]
+
+                log.info(
+                    "Enabling NVIDIA SR-IOV VFs on destination host PF: %s"
+                    % dest_pf_addr
+                )
+                vf_list = remote.enable_nvidia_vfs(dest_session, dest_pf_addr)
+                if not vf_list:
+                    raise RuntimeError(
+                        "Failed to enable NVIDIA VFs on destination %s" % dest_pf_addr
+                    )
+
+                vgpu_type = dest_device_cfg.get("vgpu_type", "")
+                if not vgpu_type:
+                    raise RuntimeError(
+                        "vgpu requires vgpu_type in host_devices.ini for '%s'"
+                        % device_name
+                    )
+
+                log.info(
+                    "Setting vGPU type %s on destination VF %s"
+                    % (vgpu_type, vf_list[0])
+                )
+                if not remote.set_nvidia_vgpu_type(dest_session, vf_list[0], vgpu_type):
+                    raise RuntimeError(
+                        "Failed to set vGPU type %s on destination VF %s"
+                        % (vgpu_type, vf_list[0])
+                    )
 
     except Exception as dest_setup_error:
         log.error(
@@ -180,6 +214,8 @@ def setup_migration_env(cfg, feature, device_name, numvfs, log):
     migration_shared_disk_path = image_path + "/" + image_name
 
     return {
+        "feature": feature,
+        "device_name": device_name,
         "dest_session": dest_session,
         "dest_ip_address": dest_ip_address,
         "dest_hostname": dest_hostname,
@@ -235,6 +271,12 @@ def teardown_migration_env(env, vm, domain_name, log):
             remote.stop_service(dest_session, service)
         else:
             log.debug("Fail to restore the service status on the remote host")
+
+    if env.get("feature") == "vgpu":
+        dest_device_cfg = host.host_devices_cfg.get(env.get("device_name", ""))
+        if dest_device_cfg:
+            dest_pf_addr = dest_device_cfg["device_addr"].split(",")[0].strip()
+            remote.disable_nvidia_vfs(dest_session, dest_pf_addr)
 
     nfs.teardown_nfs_remote(
         dest_session, migration_cfg, source_ip_address, dest_ip_address
