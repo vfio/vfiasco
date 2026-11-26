@@ -19,8 +19,9 @@ system-level:
   host_dmesg    host kernel/VFIO/IOMMU/PCIe errors
   libvirt.log   libvirt/QEMU domain, migration, device, resource errors
   vm_dmesg      guest kernel driver/PCI/network/MMIO errors
+  iperf3.log    iperf3 connection errors and zero bandwidth detection
 
-Remaining sources (iperf3.log, workload errors) not yet added.
+Remaining sources (other workload errors) not yet added.
 Device-specific sources (vGPU, GIM, etc.) are a separate, later phase.
 """
 
@@ -40,7 +41,8 @@ _TEST_LOG_PATTERNS = OrderedDict(
         (
             "ssh",
             re.compile(
-                r"Cannot SSH|Authentication failed|Connection refused|timed out", re.I
+                r"Cannot SSH|Authentication failed|Connection refused|connection.*timed out|SSH.*timed out",
+                re.I,
             ),
         ),
         ("timeout", re.compile(r"wait_for_login.*timed out|Command.*timed out", re.I)),
@@ -55,6 +57,19 @@ _TEST_LOG_PATTERNS = OrderedDict(
         ),
         ("mac", re.compile(r"00:00:00:00:00:00")),
         ("error_level", re.compile(r"\bERROR\|")),
+        (
+            "migration_job_failed",
+            re.compile(r"job 'migration (in|out)' failed"),
+        ),
+        (
+            "migration_sibling_error",
+            re.compile(r"Sibling indicated error \d+"),
+        ),
+        (
+            "migration_timeout",
+            re.compile(r"Timed out during operation"),
+        ),
+        ("postcopy_activated", re.compile(r"Postcopy requests:\s+[1-9]\d*")),
     ]
 )
 
@@ -198,7 +213,7 @@ _LIBVIRT_LOG_PATTERNS = OrderedDict(
         (
             "migration",
             re.compile(
-                r"migration failed|migration blocked|timed out|"
+                r"migration failed|migration blocked|"
                 r"cannot migrate|postcopy[ _]failed|savevm.*error|"
                 r"load.*state.*error|device state.*failed",
                 re.I,
@@ -227,6 +242,38 @@ _LIBVIRT_LOG_PATTERNS = OrderedDict(
                 r"domain is not running|unable to.*domain",
                 re.I,
             ),
+        ),
+        (
+            "migration_job_failed",
+            re.compile(r"job 'migration (in|out)' failed"),
+        ),
+        (
+            "migration_sibling_error",
+            re.compile(r"Sibling indicated error \d+"),
+        ),
+        (
+            "migration_timeout",
+            re.compile(r"Timed out during operation"),
+        ),
+        (
+            "dirty_tracking_start_failed",
+            re.compile(r"vfio: Could not start dirty page tracking"),
+        ),
+        (
+            "dirty_tracking_stop_failed",
+            re.compile(r"vfio: Could not stop dirty page tracking"),
+        ),
+        (
+            "postcopy_io_failure",
+            re.compile(r"Detected IO failure for postcopy"),
+        ),
+        (
+            "postcopy_stream_error",
+            re.compile(r"postcopy_start: Migration stream error"),
+        ),
+        (
+            "postcopy_vhost_failed",
+            re.compile(r"Failed to send postcopy_advise to vhost"),
         ),
     ]
 )
@@ -278,7 +325,6 @@ def _scan_vm_dmesg(lines):
 
 def _scan_vm_dmesg_source(test_dir):
     """Scan every guest dmesg capture for a test.
-
     Two different multi-file naming schemes exist: vm_dmesg, vm_dmesg.0,
     .1, ... (one per reboot cycle within a single domain - reuses
     ttw.py's file discovery) and vm0_dmesg, vm1_dmesg, ... (one per
@@ -323,13 +369,86 @@ def _single_file_loader(filename, scan_fn):
 
 
 # source name -> loader(test_dir); new sources are appended here.
+# iperf3 interval pattern for zero bandwidth detection
+_IPERF3_INTERVAL_PATTERN = re.compile(
+    r"\[\s*\d+\]\s+"  # [  5] - Stream ID
+    r"\d+\.\d+-\d+\.\d+\s+sec\s+"  # 0.00-1.00 sec - Interval
+    r"[\d.]+\s+\w+\s+"  # 113 MBytes or 0.00 Bytes - Transfer
+    r"([\d.]+)\s+(\w+)/sec"  # 948 Mbits/sec or 0.00 bits/sec - Bitrate
+)
+
+
+def _check_iperf3_zero_bandwidth(lines):
+    """Return error dict if all iperf3 intervals show zero bandwidth."""
+    bandwidths = []
+    for line in lines:
+        match = _IPERF3_INTERVAL_PATTERN.search(line)
+        if match:
+            # Skip summary lines (contain "sender" or "receiver")
+            if "sender" in line or "receiver" in line:
+                continue
+            bandwidth_value = float(match.group(1))
+            bandwidths.append(bandwidth_value)
+
+    # Need ≥3 intervals, all zero
+    if len(bandwidths) >= 3 and all(bw == 0.0 for bw in bandwidths):
+        return {
+            "line": 0,
+            "text": f"Zero bandwidth detected across all {len(bandwidths)} intervals (0.00 bits/sec)",
+            "category": "zero_bandwidth",
+        }
+
+    return None
+
+
+def _scan_iperf3_log(lines):
+    """Scan iperf3.log for errors and zero bandwidth."""
+    # Check if empty
+    if not lines or sum(len(line) for line in lines) < 10:
+        return [
+            {
+                "line": 0,
+                "text": f"iperf3.log is empty or too small ({sum(len(line) for line in lines)} bytes)",
+                "category": "iperf3_connection_failed",
+            }
+        ]
+
+    # Scan for error patterns
+    errors = _scan_lines(lines, _IPERF3_LOG_PATTERNS)
+
+    # Check zero bandwidth if no errors
+    if not errors:
+        zero_bw_error = _check_iperf3_zero_bandwidth(lines)
+        if zero_bw_error:
+            errors.append(zero_bw_error)
+
+    return errors
+
 
 _SOURCES = OrderedDict(
     [
         ("test.log", _single_file_loader("test.log", _scan_test_log)),
         ("host_dmesg", _single_file_loader("host_dmesg", _scan_host_dmesg)),
         ("libvirt.log", _single_file_loader("libvirt.log", _scan_libvirt_log)),
+        ("iperf3.log", _single_file_loader("iperf3.log", _scan_iperf3_log)),
         ("vm_dmesg", _scan_vm_dmesg_source),
+    ]
+)
+
+_IPERF3_LOG_PATTERNS = OrderedDict(
+    [
+        (
+            "connection_failed",
+            re.compile(r"unable to connect|Connection refused|No route to host", re.I),
+        ),
+        (
+            "server_busy",
+            re.compile(r"the server is busy running a test"),
+        ),
+        (
+            "iperf_error",
+            re.compile(r"iperf3: error"),
+        ),
     ]
 )
 
