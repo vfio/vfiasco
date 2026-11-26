@@ -2357,6 +2357,23 @@ class VM(object):
             raise exc[0]
         return self.check_domain_jobinfo(_log=log)
 
+    def migrate_back(self, dest_session, source_ip_address, option="--live"):
+        """Migrate the domain from the destination host back to the source."""
+        if not remote.migrate(
+            dest_session, self.domain_name, source_ip_address, option
+        ):
+            return False
+        r = process.run("/bin/virsh domstate %s" % self.domain_name, ignore_status=True)
+        state = r.stdout.decode().strip()
+        if state != "running":
+            log.error(
+                "FAIL - %s is '%s' on source after migrating back"
+                % (self.domain_name, state)
+            )
+            return False
+        log.info("SUCCESS - %s is running on source again" % self.domain_name)
+        return True
+
     def hot_unplug_bridge_interface_by_mac_address(self, mac_address):
         test_result = virsh.detach_bridge_interface_by_mac_address(
             self.domain_name, mac_address

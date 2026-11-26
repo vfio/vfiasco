@@ -62,6 +62,7 @@ from tests import (
     case_live_migrate_after_hotplug_and_hotunplug_device,
     case_live_migrate_after_hotunplug_failover_vf,
     case_live_migrate_no_device,
+    case_live_migrate_ping_pong_with_device,
     case_live_migrate_with_device,
     case_live_migrate_with_device_iperf,
     case_live_migrate_with_failover_vf,
@@ -3931,6 +3932,28 @@ def live_migrate_with_device(feature, device_name, domain, machine_type, bios):
             ),
         )
         return "Cancel"
+
+
+def live_migrate_ping_pong_with_device(
+    feature, device_name, domain, machine_type, bios
+):
+    log_file = get_log_file_path(feature, device_name, domain)
+    numpfs, numvfs = (1, 0) if feature == "pf" else (0, 1)
+    test_result = case_live_migrate_ping_pong_with_device.run(
+        feature, device_name, domain, machine_type, bios, numpfs, numvfs
+    )
+    files.append_content(
+        log_file,
+        "%s | %s - ping-pong live migrate a %s vm with %s %s"
+        % (
+            time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+            "PASS" if test_result else "FAIL",
+            domain,
+            device_name,
+            feature,
+        ),
+    )
+    return test_result
 
 
 def live_migrate_with_device_iperf(feature, device_name, domain, machine_type, bios):

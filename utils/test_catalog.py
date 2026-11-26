@@ -240,6 +240,10 @@ TEST_LIST = [
         "live migrate a vm with a VFIO device attached (adaptive maxdowntime)",
     ),
     (
+        "live_migrate_ping_pong_with_device",
+        "live migrate a vm with a VFIO device to destination and back to source",
+    ),
+    (
         "live_migrate_with_device_iperf",
         "live migrate a vm with a VFIO device under iperf3 workload (dirty page stress)",
     ),
@@ -421,6 +425,7 @@ TEST_LOOPS = [
         [
             "live_migrate_no_device",
             "live_migrate_with_device",
+            "live_migrate_ping_pong_with_device",
             "live_migrate_with_device_iperf",
             "cancel_live_migrate_with_device",
             "cancel_and_live_migrate_with_device",
