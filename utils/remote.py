@@ -1564,3 +1564,56 @@ def enable_vf_migration(session, pf_address, vf_index=0):
     status, output = session.get_output_status(cmd)
     log.info("VF port info: %s" % output.decode().strip())
     return status == 0
+
+
+def enable_nvidia_vfs(session, pf_addr):
+    status = session.get_cmd_status("nvidia-smi")
+    if status != 0:
+        log.error(
+            "nvidia-smi not available on remote host — NVIDIA driver may not be installed"
+        )
+        return []
+
+    sriov_manage = "/usr/lib/nvidia/sriov-manage"
+    log.info("Enabling NVIDIA SR-IOV VFs on remote host %s" % pf_addr)
+    status, output = session.get_output_status("%s -e %s" % (sriov_manage, pf_addr))
+    if status != 0:
+        log.error("Failed to enable VFs on %s: %s" % (pf_addr, output.decode().strip()))
+        return []
+
+    time.sleep(2)
+    return get_nvidia_vf_list(session, pf_addr)
+
+
+def disable_nvidia_vfs(session, pf_addr):
+    status = session.get_cmd_status("nvidia-smi")
+    if status != 0:
+        return
+
+    sriov_manage = "/usr/lib/nvidia/sriov-manage"
+    log.info("Disabling NVIDIA SR-IOV VFs on remote host %s" % pf_addr)
+    session.get_cmd_status("%s -d %s" % (sriov_manage, pf_addr))
+
+
+def get_nvidia_vf_list(session, pf_addr):
+    pf_sysfs = "/sys/bus/pci/devices/%s" % pf_addr
+    cmd = "readlink %s/virtfn*" % pf_sysfs
+    result = session.execute_command(cmd)
+    vf_list = []
+    for line in result.decode().strip().splitlines():
+        vf = re.search(r"[0-9a-fA-F]+:[0-9a-fA-F]+:[0-9a-fA-F]+\.[0-9a-fA-F]", line)
+        if vf:
+            vf_list.append(vf.group())
+    return vf_list
+
+
+def set_nvidia_vgpu_type(session, vf_addr, vgpu_type_id):
+    escaped = vf_addr.replace(":", r"\:")
+    path = "/sys/bus/pci/devices/%s/nvidia/current_vgpu_type" % escaped
+
+    log.info("Setting vGPU type %s on remote VF %s" % (vgpu_type_id, vf_addr))
+    status = session.get_cmd_status("echo %s > %s" % (vgpu_type_id, path))
+    if status != 0:
+        log.error("Failed to set vGPU type on remote VF %s" % vf_addr)
+        return False
+    return True
